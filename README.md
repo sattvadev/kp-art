@@ -5,6 +5,8 @@ and your chosen photo floats see-through on top, so you can draw while watching 
 
 - Modes: the photo itself, outlines of its value shapes, or **Values**: a breakdown strip of every value from lightest (1, paper) to darkest,
   shown Layered (light to dark up to the chosen value, the new shape outlined in red), as a single Stencil, or All at once.
+- Values are found with an edge-preserving filter (keeps edges crisp, no halo rings), grouped by the photo's own tones,
+  then cleaned of slivers and specks so each value is a solid stencil. A Simplify slider trades detail for bolder shapes.
 - Drag to move, pinch to resize and rotate, then Lock. Hold "peek" to check your lines.
 - See-through slider, mirror, grid, line colour, torch (where the phone supports it), screen kept awake.
 

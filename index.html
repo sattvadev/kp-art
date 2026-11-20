@@ -113,7 +113,10 @@ button, select, input { font: inherit; color: inherit; }
     </div>
     <div class="strip" id="strip" role="group" aria-label="Values, lightest to darkest"></div>
     <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted);margin-top:-4px"><span>Lightest</span><span>Darkest →</span></div>
-    <div class="slider"><label for="values">Number of values</label><input id="values" type="range" min="3" max="7" step="1" value="5"><output id="valuesOut">5</output></div>
+    <div class="row" style="gap:14px">
+      <div class="slider"><label for="values">Values</label><input id="values" type="range" min="3" max="7" step="1" value="5"><output id="valuesOut">5</output></div>
+      <div class="slider"><label for="simplify">Simplify</label><input id="simplify" type="range" min="0" max="10" step="1" value="3"><output id="simplifyOut">3</output></div>
+    </div>
   </div>
   <div class="row">
     <div class="slider"><label for="opacity">See-through</label><input id="opacity" type="range" min="10" max="100" step="1" value="55"></div>
@@ -157,9 +160,9 @@ button, select, input { font: inherit; color: inherit; }
     5: ['Paper', 'Light', 'Mid', 'Dark', 'Darkest'], 6: ['Paper', 'Light', 'Light mid', 'Dark mid', 'Dark', 'Darkest'],
     7: ['Paper', 'Pale', 'Light', 'Mid', 'Dark mid', 'Dark', 'Darkest'] };
 
-  var S = { mode: 'photo', view: 'layered', values: 5, step: 1, opacity: 55, mirror: false, grid: false, color: 0 };
+  var S = { mode: 'photo', view: 'layered', values: 5, simplify: 3, step: 1, opacity: 55, mirror: false, grid: false, color: 0 };
   try { var sv = JSON.parse(localStorage.getItem('trace-camera') || 'null');
-    if (sv) ['mode', 'view', 'values', 'opacity', 'mirror', 'grid', 'color'].forEach(function (k) { if (k in sv) S[k] = sv[k]; }); } catch (e) {}
+    if (sv) ['mode', 'view', 'values', 'simplify', 'opacity', 'mirror', 'grid', 'color'].forEach(function (k) { if (k in sv) S[k] = sv[k]; }); } catch (e) {}
   if (S.mode !== 'photo' && S.mode !== 'lines' && S.mode !== 'values') S.mode = 'values';  // older saved modes
   function persist() { try { localStorage.setItem('trace-camera', JSON.stringify(S)); } catch (e) {} }
 
@@ -187,7 +190,7 @@ button, select, input { font: inherit; color: inherit; }
       $('go').disabled = false; $('err').hidden = true;
       S.step = 1; idx = null; $('strip').dataset.key = '';
       if (!$('start').hidden) return;
-      process(); fit(); render();
+      fit(); render(); syncUI();
     };
     im.onerror = function () { showErr('That file could not be opened as a picture. Try a JPG, PNG or HEIC photo.'); };
     im.src = url;
@@ -207,7 +210,7 @@ button, select, input { font: inherit; color: inherit; }
         $('start').hidden = true; $('bar').hidden = false; $('float').hidden = false;
         var track = s.getVideoTracks()[0], caps = track && track.getCapabilities ? track.getCapabilities() : {};
         $('torch').hidden = !(caps && caps.torch);
-        keepAwake(); process(); fit(); render(); syncUI();
+        keepAwake(); fit(); render(); syncUI();
       })
       .catch(function (e) {
         showErr(e && e.name === 'NotAllowedError'
@@ -227,42 +230,125 @@ button, select, input { font: inherit; color: inherit; }
   });
   $('newPhoto').addEventListener('click', function () { $('file').click(); });
 
-  // ---------- value processing (same method as Value Builder)
-  function boxBlur(src, w, h, r) {
-    if (r < 1) return src.slice();
-    var a = src.slice(), b = new Float32Array(src.length), n = 2 * r + 1;
-    for (var pass = 0; pass < 3; pass++) {
-      for (var y = 0; y < h; y++) { var row = y * w, acc = 0;
-        for (var k = -r; k <= r; k++) acc += a[row + Math.min(w - 1, Math.max(0, k))];
-        for (var x = 0; x < w; x++) { b[row + x] = acc / n; acc += a[row + Math.min(w - 1, x + r + 1)] - a[row + Math.max(0, x - r)]; } }
-      for (var x2 = 0; x2 < w; x2++) { var acc2 = 0;
-        for (var k2 = -r; k2 <= r; k2++) acc2 += b[Math.min(h - 1, Math.max(0, k2)) * w + x2];
-        for (var y2 = 0; y2 < h; y2++) { a[y2 * w + x2] = acc2 / n; acc2 += b[Math.min(h - 1, y2 + r + 1) * w + x2] - b[Math.max(0, y2 - r) * w + x2]; } }
-    }
-    return a;
-  }
-  function majority(v, w, h, n) {
-    var out = new Uint8Array(v.length), cnt = new Uint8Array(n + 1);
-    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
-      cnt.fill(0);
-      for (var dy = -1; dy <= 1; dy++) { var yy = Math.min(h - 1, Math.max(0, y + dy));
-        for (var dx = -1; dx <= 1; dx++) cnt[v[yy * w + Math.min(w - 1, Math.max(0, x + dx))]]++; }
-      var best = v[y * w + x], bc = cnt[best];
-      for (var k = 1; k <= n; k++) if (cnt[k] > bc) { bc = cnt[k]; best = k; }
-      out[y * w + x] = best;
-    }
+  // ---------- value processing
+  // VALUES-BEGIN (pure functions; the test sheet loads this block as-is)
+  // Box mean over a (2r+1)^2 window using an integral image: O(N) whatever r is.
+  function boxMean(src, w, h, r) {
+    var W = w + 1, ii = new Float64Array(W * (h + 1)), out = new Float32Array(w * h);
+    for (var y = 0; y < h; y++) { var row = 0;
+      for (var x = 0; x < w; x++) { row += src[y * w + x]; ii[(y + 1) * W + x + 1] = ii[y * W + x + 1] + row; } }
+    for (var y2 = 0; y2 < h; y2++) { var y0 = Math.max(0, y2 - r), y1 = Math.min(h, y2 + r + 1);
+      for (var x2 = 0; x2 < w; x2++) { var x0 = Math.max(0, x2 - r), x1 = Math.min(w, x2 + r + 1);
+        out[y2 * w + x2] = (ii[y1 * W + x1] - ii[y0 * W + x1] - ii[y1 * W + x0] + ii[y0 * W + x0]) / ((y1 - y0) * (x1 - x0)); } }
     return out;
   }
+  // Self-guided filter: flattens tones inside shapes while keeping their edges sharp (no blur halos).
+  function guided(I, w, h, r, eps) {
+    var N = I.length, II = new Float32Array(N);
+    for (var i = 0; i < N; i++) II[i] = I[i] * I[i];
+    var mI = boxMean(I, w, h, r), mII = boxMean(II, w, h, r), A = new Float32Array(N), B = new Float32Array(N);
+    for (var j = 0; j < N; j++) { var v = mII[j] - mI[j] * mI[j], a = v / (v + eps); A[j] = a; B[j] = mI[j] - a * mI[j]; }
+    var mA = boxMean(A, w, h, r), mB = boxMean(B, w, h, r), q = new Float32Array(N);
+    for (var k = 0; k < N; k++) q[k] = mA[k] * I[k] + mB[k];
+    return q;
+  }
+  // Brightness thresholds from the picture's own tone groups (1D k-means on a histogram).
+  function toneCuts(q, n) {
+    var BINS = 256, hist = new Float64Array(BINS), lo = 1, hi = 0, i;
+    var srt = []; for (i = 0; i < q.length; i += 5) srt.push(q[i]); srt.sort(function (a, b) { return a - b; });
+    lo = srt[Math.floor(srt.length * 0.005)]; hi = srt[Math.floor(srt.length * 0.995)];
+    var span = Math.max(1e-6, hi - lo);
+    for (i = 0; i < q.length; i++) hist[Math.max(0, Math.min(BINS - 1, Math.round((q[i] - lo) / span * (BINS - 1))))]++;
+    var c = []; for (i = 0; i < n; i++) c.push((i + 0.5) / n * (BINS - 1));   // even start, then let the tones pull
+    for (var it = 0; it < 40; it++) {
+      var sum = new Float64Array(n), cnt = new Float64Array(n);
+      for (var b = 0; b < BINS; b++) { if (!hist[b]) continue; var best = 0, bd = 1e9;
+        for (var k = 0; k < n; k++) { var dd = Math.abs(b - c[k]); if (dd < bd) { bd = dd; best = k; } }
+        sum[best] += b * hist[b]; cnt[best] += hist[b]; }
+      for (var k2 = 0; k2 < n; k2++) if (cnt[k2]) c[k2] = sum[k2] / cnt[k2];
+      c.sort(function (a, b) { return a - b; });
+    }
+    var cuts = [];   // ascending brightness thresholds between neighbouring groups
+    for (i = 0; i < n - 1; i++) cuts.push(lo + ((c[i] + c[i + 1]) / 2) / (BINS - 1) * span);
+    // keep every group a real step: at least 6% of the range apart
+    for (i = 1; i < cuts.length; i++) if (cuts[i] - cuts[i - 1] < 0.06 * span) cuts[i] = cuts[i - 1] + 0.06 * span;
+    return cuts;
+  }
+  // Majority vote in a (2r+1)^2 window: rounds off ragged boundaries.
+  function modeFilter(v, w, h, n, r) {
+    var N = v.length, best = new Uint8Array(N), bestC = new Float32Array(N), m = new Float32Array(N);
+    for (var k = 1; k <= n; k++) {
+      for (var i = 0; i < N; i++) m[i] = v[i] === k ? 1 : 0;
+      var c = boxMean(m, w, h, r);
+      for (var j = 0; j < N; j++) if (c[j] > bestC[j]) { bestC[j] = c[j]; best[j] = k; }
+    }
+    return best;
+  }
+  // Merge islands smaller than minArea into the value that surrounds them most.
+  function removeIslands(v, w, h, n, minArea) {
+    var N = v.length, seen = new Uint8Array(N), stack = new Int32Array(N), comp = new Int32Array(N);
+    for (var s0 = 0; s0 < N; s0++) {
+      if (seen[s0]) continue;
+      var val = v[s0], top = 0, size = 0, nb = new Float64Array(n + 1);
+      stack[top++] = s0; seen[s0] = 1;
+      while (top) { var p = stack[--top]; comp[size++] = p; var x = p % w, y = (p - x) / w;
+        var q4 = [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, y > 0 ? p - w : -1, y < h - 1 ? p + w : -1];
+        for (var t = 0; t < 4; t++) { var qq = q4[t]; if (qq < 0) continue;
+          if (v[qq] === val) { if (!seen[qq]) { seen[qq] = 1; stack[top++] = qq; } } else nb[v[qq]]++; } }
+      if (size < minArea) { var to = val, bc = 0; for (var k = 1; k <= n; k++) if (nb[k] > bc) { bc = nb[k]; to = k; }
+        for (var z = 0; z < size; z++) v[comp[z]] = to; }
+    }
+    return v;
+  }
+  // Hand slivers (parts of a value narrower than 2t+1 px, e.g. thin bands where light meets dark)
+  // to their neighbours, so every value is made of solid shapes.
+  function removeThin(v, w, h, n, t) {
+    var N = v.length, m = new Float32Array(N), keep = new Uint8Array(N);
+    for (var k = 1; k <= n; k++) {
+      for (var i = 0; i < N; i++) m[i] = v[i] === k ? 1 : 0;
+      var er = boxMean(m, w, h, t);                       // erosion: whole window is value k
+      for (var i2 = 0; i2 < N; i2++) m[i2] = er[i2] > 0.999 ? 1 : 0;
+      var di = boxMean(m, w, h, t);                       // dilation back out: the opened shape
+      for (var i3 = 0; i3 < N; i3++) if (v[i3] === k && di[i3] > 0) keep[i3] = 1;
+    }
+    var out = new Uint8Array(N), left = 0;
+    for (var j = 0; j < N; j++) { if (keep[j]) out[j] = v[j]; else left++; }
+    // fill the freed pixels from the nearest kept shapes, growing a few pixels per pass
+    var gr = Math.max(2, t);
+    for (var pass = 0; pass < 8 && left; pass++) {
+      var best = new Uint8Array(N), bestC = new Float32Array(N);
+      for (var k2 = 1; k2 <= n; k2++) {
+        for (var a = 0; a < N; a++) m[a] = out[a] === k2 ? 1 : 0;
+        var c = boxMean(m, w, h, gr);
+        for (var b = 0; b < N; b++) if (!out[b] && c[b] > bestC[b]) { bestC[b] = c[b]; best[b] = k2; }
+      }
+      left = 0;
+      for (var z = 0; z < N; z++) if (!out[z]) { if (best[z]) out[z] = best[z]; else left++; }
+    }
+    for (var y = 0; y < N; y++) if (!out[y]) out[y] = v[y];
+    return out;
+  }
+  // lum: brightness 0..1 per pixel. Returns value per pixel, 1 = lightest .. n = darkest.
+  // simplify 0..10: 0 keeps detail, 10 gives big bold shapes.
+  function computeValues(lum, w, h, n, simplify) {
+    var scale = Math.max(w, h) / 1000, sp = Math.max(0, Math.min(10, simplify));
+    var r = Math.max(2, Math.round((3 + sp * 1.4) * scale)), eps = 0.0015 + sp * 0.0012;
+    var q = guided(guided(lum, w, h, r, eps), w, h, Math.max(2, Math.round(r * 0.6)), eps);
+    var cuts = toneCuts(q, n), v = new Uint8Array(w * h);
+    for (var i = 0; i < v.length; i++) { var dark = 0; for (var c = 0; c < cuts.length; c++) if (q[i] < cuts[c]) dark++; v[i] = dark + 1; }  // 1 = lightest
+    v = removeThin(v, w, h, n, Math.max(2, Math.round((2 + sp * 0.4) * scale)));
+    v = modeFilter(v, w, h, n, Math.max(1, Math.round((1 + sp * 0.35) * scale)));
+    return removeIslands(v, w, h, n, Math.round(w * h * (0.0002 + sp * 0.00025)));
+  }
+  // VALUES-END
   function process() {
     if (!img) return;
-    var n = S.values, w = img.w, h = img.h;
-    var bl = boxBlur(img.lum, w, h, Math.round(6 * Math.max(w, h) / 1000));
-    var sample = []; for (var s = 0; s < bl.length; s += 7) sample.push(bl[s]);
-    sample.sort(function (a, b) { return a - b; });
-    var cuts = []; for (var q = 1; q < n; q++) cuts.push(sample[Math.floor(sample.length * q / n)]);
-    var v = new Uint8Array(w * h);
-    for (var i = 0; i < v.length; i++) { var dark = 0; for (var c = 0; c < cuts.length; c++) if (bl[i] < cuts[c]) dark++; v[i] = dark + 1; }
-    idx = majority(majority(v, w, h, n), w, h, n);
+    idx = computeValues(img.lum, img.w, img.h, S.values, S.simplify);
+  }
+  // Recompute values after the 'working' message has had a chance to paint.
+  function reprocess(after) {
+    toast('Working out the values…');
+    setTimeout(function () { process(); $('strip').dataset.key = ''; after(); $('toast').hidden = true; }, 40);
   }
 
   // ---------- draw the overlay (transparent where nothing is drawn)
@@ -300,13 +386,13 @@ button, select, input { font: inherit; color: inherit; }
     if (!img) return;
     var w = img.w, h = img.h; overlay.width = w; overlay.height = h;
     if (S.mode === 'photo') { octx.drawImage(srcCanvas, 0, 0); drawGrid(); place(); return; }
-    if (!idx) process();
+    if (!idx) { reprocess(function () { render(); syncUI(); }); return; }   // values are worked out on first need
     octx.putImageData(buildImage(S.mode, S.view, S.step), 0, 0); drawGrid(); place();
   }
   // The breakdown strip: one small stencil per value, lightest first.
   function buildStrip() {
     if (!img || !idx) return;
-    var key = img.w + 'x' + img.h + ':' + S.values + ':' + S.color;
+    var key = img.w + 'x' + img.h + ':' + S.values + ':' + S.simplify + ':' + S.color;
     var strip = $('strip'), n = S.values, names = NAMES[n];
     if (strip.dataset.key === key && strip.children.length === n) return;
     strip.innerHTML = ''; strip.dataset.key = key;
@@ -388,6 +474,7 @@ button, select, input { font: inherit; color: inherit; }
     $('viewSeg').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.v === S.view ? 'true' : 'false'); });
     $('valueRow').hidden = S.mode !== 'values';
     $('values').value = S.values; $('valuesOut').textContent = S.values; $('opacity').value = S.opacity;
+    $('simplify').value = S.simplify; $('simplifyOut').textContent = S.simplify;
     $('mirror').setAttribute('aria-pressed', S.mirror ? 'true' : 'false');
     $('grid').setAttribute('aria-pressed', S.grid ? 'true' : 'false');
     $('color').textContent = 'Lines: ' + COLORS[S.color][0];
@@ -404,7 +491,9 @@ button, select, input { font: inherit; color: inherit; }
   $('modeSeg').querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { setMode(b.dataset.v); }); });
   $('viewSeg').querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { S.view = b.dataset.v; persist(); render(); syncUI(); }); });
   $('values').addEventListener('input', function () { $('valuesOut').textContent = this.value; });
-  $('values').addEventListener('change', function () { S.values = +this.value; S.step = Math.min(S.step, S.values); persist(); process(); $('strip').dataset.key = ''; render(); syncUI(); });
+  $('simplify').addEventListener('input', function () { $('simplifyOut').textContent = this.value; });
+  $('simplify').addEventListener('change', function () { S.simplify = +this.value; persist(); reprocess(function () { render(); syncUI(); }); });
+  $('values').addEventListener('change', function () { S.values = +this.value; S.step = Math.min(S.step, S.values); persist(); reprocess(function () { render(); syncUI(); }); });
   $('opacity').addEventListener('input', function () { S.opacity = +this.value; persist(); place(); });
   $('mirror').addEventListener('click', function () { S.mirror = !S.mirror; persist(); place(); syncUI(); });
   $('grid').addEventListener('click', function () { S.grid = !S.grid; persist(); render(); syncUI(); });
