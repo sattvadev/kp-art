@@ -3,25 +3,46 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<meta name="theme-color" content="#0f1115">
+<meta name="theme-color" content="#7C2A34">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Trace Camera</title>
+<meta name="apple-mobile-web-app-title" content="NUMOTIFSTUDIO - Trace">
+<meta name="application-name" content="NUMOTIFSTUDIO - Trace">
+<title>NUMOTIFSTUDIO - Trace</title>
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap">
 <style>
-/* A camera tracing tool. The camera fills the screen; the picture and the grid ride on it.
-   Floating frosted pills: a top bar (back, undo, redo, Tools), a Tools sheet with tabs,
-   and a bottom bar (what your fingers move, then Move / Hide / Opacity). */
+/* NUMOTIFSTUDIO - Trace. A camera tracing tool: the camera fills the screen; the picture and the grid ride on it.
+   Floating frosted pills: a top bar (home, undo, redo, help, Tools), a Tools panel with tabs,
+   and a bottom bar (step strip, then Move / Hide / Opacity).
+   Colours, type, radii and shadows follow the NU Motif design tokens (Oxblood, light mode). */
 :root {
-  --glass: rgba(246, 247, 249, 0.88); --glass-strong: rgba(250, 251, 252, 0.95);
-  --ink: #15171c; --muted: #5d6472; --line: rgba(20, 24, 32, 0.12);
-  --accent: #2f55d4; --accent-ink: #ffffff; --accent-soft: rgba(47, 85, 212, 0.12);
-  --dark: #0f1115; --danger: #c2412d;
+  /* NU Motif tokens */
+  --wine-50: #FAF0F0; --wine-100: #F4DCDD; --wine-200: #E6B7BA; --wine-600: #7C2A34; --wine-700: #63212A;
+  --gray-25: #FFFFFF; --gray-50: #F5F3EF; --gray-100: #EFECE6; --gray-200: #E2DED6; --gray-300: #CFC9BF; --gray-400: #A29B90;
+  --gray-600: #5C5850; --gray-700: #44413B; --gray-900: #171613; --ink-0: #0F0E0C; --paper: #FBFAF8;
+  --radius-xs: 6px; --radius-control: 10px; --radius-panel: 16px; --radius-full: 999px;
+  --shadow-sm: 0 1px 2px rgba(15,15,20,0.05), 0 1px 1px rgba(15,15,20,0.03);
+  --shadow-md: 0 4px 12px rgba(15,15,20,0.07), 0 2px 4px rgba(15,15,20,0.04);
+  --shadow-lg: 0 12px 28px rgba(15,15,20,0.10), 0 4px 10px rgba(15,15,20,0.05);
+  --focus-ring: 0 0 0 3px color-mix(in oklab, #7C2A34 22%, transparent);
+  --ease: cubic-bezier(0.22, 1, 0.36, 1); --duration-micro: 120ms; --duration-standard: 200ms;
+  --font: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  /* what the app uses */
+  --glass: rgba(255, 253, 252, 0.9); --glass-strong: #FFFFFF;
+  --ink: var(--ink-0); --muted: var(--gray-600); --line: var(--gray-200);
+  --accent: var(--wine-600); --accent-hover: var(--wine-700); --accent-ink: #FFFFFF; --accent-soft: #F6E7E8;
+  --dark: var(--ink-0); --danger: #B91C1C;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; background: #000; color: var(--ink); touch-action: none; overscroll-behavior: none; -webkit-text-size-adjust: 100%;
-  font: 15px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+  font: 500 15px/1.4 var(--font); letter-spacing: -0.005em; overflow: hidden; }
 button, select, input { font: inherit; color: inherit; }
 [hidden] { display: none !important; }
-:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: var(--focus-ring); }
 
 /* the world: camera, picture and grid move together when you zoom the view */
 #stage { position: fixed; inset: 0; touch-action: none; overflow: hidden; background: #000; }
@@ -29,10 +50,11 @@ button, select, input { font: inherit; color: inherit; }
 #video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
 #overlay { position: absolute; left: 50%; top: 50%; transform-origin: 50% 50%; pointer-events: none; will-change: transform, opacity; }
 #gridLayer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#photoGrid { position: absolute; left: 50%; top: 50%; transform-origin: 50% 50%; pointer-events: none; will-change: transform; }
 
 /* frosted pills */
 .glass { background: var(--glass); backdrop-filter: blur(14px) saturate(1.4); -webkit-backdrop-filter: blur(14px) saturate(1.4);
-  border: 1px solid rgba(255,255,255,0.6); box-shadow: 0 2px 10px rgba(0,0,0,0.18); }
+  border: 1px solid rgba(255,255,255,0.7); box-shadow: var(--shadow-lg); }
 .pill { border-radius: 999px; }
 .ibtn { border: 0; background: transparent; padding: 8px 10px; border-radius: 999px; cursor: pointer; display: grid; place-items: center; }
 .ibtn svg { width: 24px; height: 24px; }
@@ -53,8 +75,8 @@ button, select, input { font: inherit; color: inherit; }
 #tabs { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px; }
 #tabs::-webkit-scrollbar { display: none; }
 #tabs button { flex: none; border: 0; padding: 10px 18px; border-radius: 999px; cursor: pointer; font-weight: 600; }
-#tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
-.card { border-radius: 22px; padding: 14px 16px; max-height: min(40vh, 360px); overflow-y: auto; display: grid; gap: 12px; touch-action: pan-y; }
+#tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.card { border-radius: var(--radius-panel); padding: 14px 16px; max-height: min(40vh, 360px); overflow-y: auto; display: grid; gap: 12px; touch-action: pan-y; }
 details.more { border-top: 1px solid var(--line); padding-top: 8px; }
 details.more summary { cursor: pointer; font-weight: 600; color: var(--accent); list-style: none; padding: 4px 0; }
 details.more summary::-webkit-details-marker { display: none; }
@@ -67,26 +89,26 @@ details.more > div { display: grid; gap: 12px; padding-top: 8px; }
 .grow { flex: 1 1 180px; min-width: 0; display: grid; gap: 6px; }
 .grow > span { font-size: .9rem; text-align: center; }
 input[type=range] { width: 100%; accent-color: var(--accent); }
-.switch { width: 58px; height: 34px; border-radius: 999px; border: 0; background: #b9bec8; position: relative; cursor: pointer; padding: 0; }
-.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 28px; height: 28px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .15s; }
+.switch { width: 58px; height: 34px; border-radius: 999px; border: 0; background: var(--gray-300); position: relative; cursor: pointer; padding: 0; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 28px; height: 28px; border-radius: 50%; background: #fff; box-shadow: var(--shadow-md); transition: transform var(--duration-standard) var(--ease); }
 .switch[aria-checked="true"] { background: var(--accent); }
 .switch[aria-checked="true"]::after { transform: translateX(24px); }
 .step2 { display: inline-flex; border-radius: 999px; background: rgba(20,24,32,0.08); }
 .step2 button { border: 0; background: transparent; width: 46px; height: 36px; font-size: 1.3rem; cursor: pointer; }
 .step2 button + button { border-left: 1px solid var(--line); }
-.seg { display: inline-flex; border-radius: 999px; background: rgba(20,24,32,0.08); padding: 3px; }
+.seg { display: inline-flex; border-radius: 999px; background: var(--gray-100); padding: 3px; }
 .seg button { border: 0; background: transparent; padding: 7px 13px; border-radius: 999px; cursor: pointer; color: var(--muted); font-weight: 500; white-space: nowrap; }
-.seg button[aria-pressed="true"] { background: #fff; color: var(--ink); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
-.chip { border: 1px solid var(--line); background: rgba(255,255,255,0.7); border-radius: 999px; padding: 7px 13px; cursor: pointer; white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: #fff; color: var(--accent); font-weight: 600; box-shadow: var(--shadow-md); }
+.chip { border: 1px solid var(--line); background: #fff; font-weight: 600; border-radius: 999px; padding: 7px 13px; cursor: pointer; white-space: nowrap; }
 .chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .note { font-size: .82rem; color: var(--muted); }
 .swatchDot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line); display: inline-block; }
 /* step bar: the breakdown steps, always on the drawing screen */
-#stepBar { width: min(520px, 100%); border-radius: 20px; padding: 7px 8px 8px; display: grid; gap: 5px; }
+#stepBar { width: min(520px, 100%); border-radius: var(--radius-panel); padding: 7px 8px 8px; display: grid; gap: 5px; }
 #stepLabel { font-size: .84rem; font-weight: 600; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #strip { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
-.sbtn { height: 44px; min-width: 0; border-radius: 12px; border: 0; padding: 0; cursor: pointer; font-weight: 700; font-size: 1.05rem;
-  box-shadow: inset 0 0 0 1px rgba(20,24,32,.18); display: grid; place-items: center; }
+.sbtn { height: 44px; min-width: 0; border-radius: var(--radius-control); border: 0; padding: 0; cursor: pointer; font-weight: 700; font-size: 1.05rem;
+  box-shadow: inset 0 0 0 1px rgba(15,14,12,.16); display: grid; place-items: center; font-variant-numeric: tabular-nums; }
 .sbtn[aria-pressed="true"] { box-shadow: inset 0 0 0 3px var(--accent), inset 0 0 0 5px #fff; }
 .sbtn.all { background: #fff; color: var(--ink); font-size: .9rem; }
 .colChip { display: inline-flex; align-items: center; gap: 8px; }
@@ -96,49 +118,56 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 #bottom { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; display: grid; justify-items: center; gap: 10px;
   padding: 0 max(12px, env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); pointer-events: none; }
 #bottom > * { pointer-events: auto; }
-#targets { display: flex; gap: 4px; padding: 6px 10px; border-radius: 22px; }
+#targets { display: flex; gap: 4px; padding: 6px 10px; border-radius: var(--radius-panel); }
 #targets button { border: 0; background: transparent; display: grid; justify-items: center; gap: 2px; padding: 4px 12px; cursor: pointer; color: var(--ink); font-size: .74rem; border-radius: 14px; }
 #targets button svg { width: 28px; height: 28px; }
 #targets button[aria-pressed="true"] { color: var(--accent); font-weight: 600; }
 #bottom > * { max-width: 100%; }
 #actions { display: flex; gap: clamp(8px, 3vw, 14px); justify-content: center; width: min(400px, 100%); }
 #actions button { flex: 1 1 0; min-width: 0; border: 0; padding: 15px 8px; border-radius: 999px; font-weight: 700; font-size: 1.15rem; cursor: pointer; }
-#actions button[aria-pressed="true"] { color: var(--accent); }
-#opacityPop { width: min(420px, 92vw); border-radius: 18px; padding: 10px 16px; display: grid; gap: 4px; }
+#actions button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+#opacityPop { width: min(420px, 92vw); border-radius: var(--radius-panel); padding: 10px 16px; display: grid; gap: 4px; }
 #opacityPop span { font-size: .85rem; text-align: center; color: var(--muted); }
 
 #toast { position: fixed; z-index: 30; left: 50%; top: calc(70px + env(safe-area-inset-top)); transform: translateX(-50%);
-  border-radius: 14px; padding: 9px 14px; font-size: .92rem; max-width: 84vw; text-align: center; background: var(--glass-strong); box-shadow: 0 2px 12px rgba(0,0,0,.25); }
+  border-radius: var(--radius-full); padding: 9px 16px; font-size: .9rem; font-weight: 600; max-width: 84vw; text-align: center; background: var(--gray-900); color: #fff; box-shadow: var(--shadow-lg); }
 #lockTag { position: fixed; z-index: 18; right: max(14px, env(safe-area-inset-right)); top: calc(70px + env(safe-area-inset-top));
   border: 0; border-radius: 999px; padding: 7px 12px; font-size: .85rem; font-weight: 600; display: flex; align-items: center; gap: 6px; cursor: pointer; }
 #lockTag svg { width: 16px; height: 16px; }
 
 /* dialogs: leave confirmation and help */
-.modal { position: fixed; inset: 0; z-index: 35; display: grid; place-items: center; background: rgba(0,0,0,.45);
+.modal { position: fixed; inset: 0; z-index: 35; display: grid; place-items: center; background: rgba(15,14,12,.5);
   padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); }
-.modal .box { width: min(420px, 100%); max-height: 100%; overflow-y: auto; border-radius: 22px; padding: 20px; display: grid; gap: 12px; background: var(--glass-strong); touch-action: pan-y; }
-.modal h2 { margin: 0; font-size: 1.2rem; }
-.modal p, .modal li { margin: 0; color: #3c424e; }
+.modal .box { width: min(420px, 100%); max-height: 100%; overflow-y: auto; border-radius: var(--radius-panel); padding: 20px; display: grid; gap: 12px; background: var(--glass-strong); box-shadow: var(--shadow-lg); touch-action: pan-y; }
+.modal h2 { margin: 0; font-size: 1.3rem; font-weight: 700; letter-spacing: -0.022em; }
+.modal p, .modal li { margin: 0; color: var(--gray-700); }
 .modal ul { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
 .modal .btns { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
-.modal .btns button { border: 0; border-radius: 999px; padding: 11px 18px; font-weight: 700; cursor: pointer; background: rgba(20,24,32,.08); }
+.modal .btns button { border: 0; border-radius: 999px; padding: 11px 18px; font-weight: 700; cursor: pointer; background: var(--gray-100); }
 .modal .btns button.primary { background: var(--accent); color: var(--accent-ink); }
+.modal .btns button.primary:hover { background: var(--accent-hover); }
 
-/* start screen */
-#start { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: var(--dark); color: #f2f3f6;
-  padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); overflow-y: auto; }
+/* start screen: warm paper, wine brand plate */
+#start { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: var(--paper); color: var(--ink);
+  padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); overflow-y: auto; touch-action: pan-y; }
 .startcard { width: min(440px, 100%); display: grid; gap: 18px; }
-.startcard h1 { margin: 0; font-size: 1.8rem; letter-spacing: -0.01em; }
-.startcard p { margin: 0; color: #a3a9b8; }
-.steps { margin: 0; padding-left: 1.2em; color: #a3a9b8; display: grid; gap: 6px; }
-.big { display: block; width: 100%; padding: 15px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.16);
-  background: #1b1f28; color: #f2f3f6; text-align: center; font-weight: 600; cursor: pointer; position: relative; overflow: hidden; }
-.big.primary { background: #4f72f0; border-color: #4f72f0; color: #fff; }
+.brand { background: var(--accent); border-radius: var(--radius-panel); padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; box-shadow: var(--shadow-md); }
+.brand img { height: 26px; width: auto; display: block; }
+.brand span { color: #fff; font-weight: 600; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; opacity: .85; }
+.eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); margin-bottom: -10px; }
+.startcard h1 { margin: 0; font-size: clamp(26px, 8vw, 34px); line-height: 1.1; font-weight: 700; letter-spacing: -0.022em; overflow-wrap: anywhere; }
+.startcard p { margin: 0; color: var(--gray-700); }
+.steps { margin: 0; padding: 14px 16px 14px 34px; color: var(--gray-700); display: grid; gap: 6px; background: #fff; border: 1px solid var(--line); border-radius: var(--radius-panel); }
+.big { display: block; width: 100%; padding: 15px; border-radius: var(--radius-full); border: 1px solid var(--gray-200);
+  background: #fff; color: var(--ink); text-align: center; font-weight: 700; cursor: pointer; position: relative; overflow: hidden; box-shadow: var(--shadow-sm); }
+.big.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.big.primary:hover:not(:disabled) { background: var(--accent-hover); }
 .big:disabled { opacity: .4; cursor: default; }
 .big input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 #thumbWrap { display: flex; align-items: center; gap: 12px; }
-#thumb { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; }
-.msg { color: #ff9a88; }
+#thumb { width: 64px; height: 64px; object-fit: cover; border-radius: var(--radius-control); }
+.msg { color: var(--danger); }
+.fine { font-size: .82rem; color: var(--muted) !important; }
 </style>
 </head>
 <body>
@@ -147,6 +176,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
     <video id="video" playsinline muted autoplay></video>
     <canvas id="overlay"></canvas>
     <canvas id="gridLayer"></canvas>
+    <canvas id="photoGrid"></canvas>
   </div>
 </div>
 
@@ -220,11 +250,19 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
   <div class="card glass" data-panel="grid" hidden>
     <div class="row">
       <div class="ctl"><button type="button" class="switch" id="gridSw" role="switch" aria-checked="false" aria-label="Show grid"></button><span>Show Grid</span></div>
+      <div class="seg" id="gridOnSeg" role="group" aria-label="Where the grid sits">
+        <button type="button" data-v="photo" aria-pressed="true">On the photo</button>
+        <button type="button" data-v="screen" aria-pressed="false">On the screen</button>
+      </div>
+    </div>
+    <div class="grow" id="gridCellsRow"><input id="gridCells" type="range" min="2" max="12" step="1" value="4" aria-label="Squares across the photo"><span>Squares across: <output id="gridCellsOut">4</output></span></div>
+    <div class="grow" id="gridSizeRow" hidden><input id="gridSize" type="range" min="30" max="200" step="5" value="90" aria-label="Grid cell size"><span>Cell size</span></div>
+    <div class="row">
       <button type="button" class="chip colChip" id="gridCol"><i class="swatchDot" id="gridDot"></i><span>Colour</span></button>
+      <button type="button" class="chip" id="gridDiag" aria-pressed="false">Diagonals</button>
       <div class="grow"><input id="gridOpacity" type="range" min="10" max="100" step="1" value="80" aria-label="Grid opacity"><span>Grid Opacity</span></div>
     </div>
-    <div class="grow"><input id="gridSize" type="range" min="30" max="200" step="5" value="90" aria-label="Grid cell size"><span>Cell size</span></div>
-    <div class="note">To drag the grid, turn on <b>Move</b> and choose <b>Grid</b> at the bottom.</div>
+    <div class="note" id="gridNote">The grid is fixed to the photo: it moves, scales and turns with it. Draw the same squares on your paper to check proportions and angles.</div>
   </div>
 
   <div class="card glass" data-panel="camera" hidden>
@@ -282,7 +320,8 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
       <li><b>Lock it:</b> turn <b>Move</b> off. Now a pinch zooms in on details and the picture stays lined up. Double-tap to zoom out.</li>
       <li><b>Steps:</b> in Values or AI outlines, tap a number at the bottom to jump to that step, lightest first. <b>All</b> shows everything.</li>
       <li><b>Tools</b> has the view (photo, outlines, values), grid, strobe, camera and flashlight. Tap <b>Done</b> or the picture to close it.</li>
-      <li><b>Hide</b> and <b>Opacity</b> help you check your drawing against the paper.</li>
+      <li><b>Grid:</b> in Tools → Grid, put the grid on the photo. It sticks to the picture as you move, scale or turn it. Draw the same squares on your paper to keep proportions and angles right; Diagonals help with perspective.</li>
+      <li><b>Hide</b> and <b>Opacity</b> help you check your drawing against the paper. Hide leaves the grid showing.</li>
     </ul>
     <p class="note">Photos stay on your phone. AI sketch uses the Informative Drawings model by Caroline Chan, Frédo Durand and Phillip Isola (MIT License), run on your phone.</p>
     <div class="btns"><button type="button" class="primary" id="helpClose">Got it</button></div>
@@ -291,7 +330,9 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 
 <section id="start" aria-labelledby="startTitle">
   <div class="startcard">
-    <h1 id="startTitle">Trace Camera</h1>
+    <div class="brand"><img src="assets/wordmark-white.png" alt="NU Motif Studio" width="441" height="64"><span>Trace</span></div>
+    <div class="eyebrow">Camera tracing</div>
+    <h1 id="startTitle">NUMOTIFSTUDIO - Trace</h1>
     <p>Your picture floats over the live camera, so you can trace it onto paper while watching your pencil on screen.</p>
     <ol class="steps">
       <li>Prop your phone 25–40 cm above the paper, camera facing down (a stand, a glass or a stack of books).</li>
@@ -304,8 +345,8 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
     <label class="big" for="file">Choose a photo<input type="file" id="file" accept="image/*"></label>
     <button type="button" class="big primary" id="go" disabled>Start camera</button>
     <p class="msg" id="err" hidden></p>
-    <p style="font-size:.85rem">Photos stay on your phone. Nothing is uploaded.</p>
-    <p style="font-size:.78rem">AI sketch uses the Informative Drawings model by Caroline Chan, Frédo Durand and Phillip Isola (MIT License), run on your phone.</p>
+    <p class="fine">Photos stay on your phone. Nothing is uploaded.</p>
+    <p class="fine">AI sketch uses the Informative Drawings model by Caroline Chan, Frédo Durand and Phillip Isola (MIT License), run on your phone.</p>
   </div>
 </section>
 
@@ -314,7 +355,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
   var MAX_SIDE = 1100;
-  var COLORS = [['black', [20, 18, 16]], ['white', [255, 255, 255]], ['red', [235, 45, 45]], ['blue', [40, 90, 255]], ['green', [30, 160, 80]]];
+  var COLORS = [['black', [20, 18, 16]], ['white', [255, 255, 255]], ['red', [235, 45, 45]], ['blue', [40, 90, 255]], ['green', [30, 160, 80]], ['wine', [124, 42, 52]]];
   // breakdown highlight colours
   var HL = [['coral', [242, 104, 84]], ['blue', [58, 112, 240]], ['green', [36, 168, 96]], ['yellow', [246, 196, 38]]];
   var NAMES = { 3: ['Paper', 'Mid', 'Darkest'], 4: ['Paper', 'Light', 'Dark', 'Darkest'],
@@ -322,8 +363,8 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
     7: ['Paper', 'Pale', 'Light', 'Mid', 'Dark mid', 'Dark', 'Darkest'] };
 
   var S = { mode: 'photo', view: 'layered', values: 5, simplify: 3, hl: 0, lineStyle: 'ai', step: 1, opacity: 55, mirror: false,
-            color: 0, grid: false, gridColor: 3, gridOpacity: 80, gridSize: 90, strobeSpeed: 4, aiView: 'layered', aiLayer: 1, cumulative: true };
-  var SAVED = ['mode', 'view', 'values', 'simplify', 'hl', 'lineStyle', 'opacity', 'mirror', 'color', 'grid', 'gridColor', 'gridOpacity', 'gridSize', 'strobeSpeed', 'aiView', 'aiLayer', 'cumulative'];
+            color: 0, grid: false, gridColor: 3, gridOpacity: 80, gridSize: 90, gridOn: 'photo', gridCells: 4, gridDiag: false, strobeSpeed: 4, aiView: 'layered', aiLayer: 1, cumulative: true };
+  var SAVED = ['mode', 'view', 'values', 'simplify', 'hl', 'lineStyle', 'opacity', 'mirror', 'color', 'grid', 'gridColor', 'gridOpacity', 'gridSize', 'gridOn', 'gridCells', 'gridDiag', 'strobeSpeed', 'aiView', 'aiLayer', 'cumulative'];
   try { var sv = JSON.parse(localStorage.getItem('trace-camera') || 'null');
     if (sv) SAVED.forEach(function (k) { if (k in sv) S[k] = sv[k]; });
     if (sv && !sv.v2) S.lineStyle = 'ai';   // one-time switch: AI sketch became the default outline style
@@ -365,7 +406,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
       S.step = 1; idx = null; lineMap = null; aiMap = null; $('strip').dataset.key = '';
       undoStack = []; redoStack = []; updateUndo();
       if (!$('start').hidden) return;
-      setMove(true); fit(); render(); syncUI();
+      setMove(true); fit(); drawGridLayer(); render(); syncUI();
     };
     im.onerror = function () { showErr('That file could not be opened as a picture. Try a JPG, PNG or HEIC photo.'); };
     im.src = url;
@@ -879,6 +920,9 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
     overlay.style.transform = 'translate(-50%, -50%) translate(' + T.x + 'px,' + T.y + 'px) rotate(' + T.rot + 'rad) scale(' + (S.mirror ? -T.scale : T.scale) + ',' + T.scale + ')';
     overlay.style.opacity = S.opacity / 100;
     overlay.style.visibility = (hidden || (strobeOn && !strobePhase)) ? 'hidden' : 'visible';
+    var pg = $('photoGrid');
+    pg.style.width = img.w + 'px'; pg.style.height = img.h + 'px'; pg.style.transform = overlay.style.transform;
+    if (S.grid && S.gridOn === 'photo' && (!drawPhotoGrid.scale || Math.abs(T.scale / drawPhotoGrid.scale - 1) > 0.12)) drawPhotoGrid();
   }
   function placeWorld() {
     $('world').style.transform = 'translate(' + V.x + 'px,' + V.y + 'px) scale(' + V.s + ')';
@@ -893,11 +937,35 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
   function resetView() { V.x = 0; V.y = 0; V.s = 1; placeWorld(); }
 
   // ---------- grid over the whole screen; it zooms with the view and can be dragged
+  // Grid fixed to the photo: square cells from the photo's top-left corner, plus its outline.
+  // Drawn in the photo's own pixels, so it moves, scales, turns and mirrors with the picture.
+  function drawPhotoGrid() {
+    var c = $('photoGrid');
+    if (!img || !S.grid || S.gridOn !== 'photo') { c.width = 1; c.height = 1; c.getContext('2d').clearRect(0, 0, 1, 1); drawPhotoGrid.scale = 0; return; }
+    var R = 2, w = img.w, h = img.h; c.width = w * R; c.height = h * R;
+    var x = c.getContext('2d'); x.setTransform(R, 0, 0, R, 0, 0); x.clearRect(0, 0, w, h);
+    var sc = T.scale || 1; drawPhotoGrid.scale = sc;
+    var lw = 1.6 / sc, cell = w / S.gridCells, col = COLORS[S.gridColor][1];
+    x.strokeStyle = 'rgba(' + col.join(',') + ',' + (S.gridOpacity / 100) + ')'; x.lineCap = 'butt';
+    x.lineWidth = lw; x.beginPath();
+    for (var i = 1; i < S.gridCells; i++) { var gx = i * cell; x.moveTo(gx, 0); x.lineTo(gx, h); }
+    for (var gy = cell; gy < h - 0.5; gy += cell) { x.moveTo(0, gy); x.lineTo(w, gy); }
+    x.stroke();
+    if (S.gridDiag) {   // corner-to-corner in each square: helps with angles and perspective
+      x.lineWidth = lw * 0.7; x.setLineDash([6 / sc, 5 / sc]); x.beginPath();
+      for (var cx = 0; cx < w - 0.5; cx += cell) for (var cy = 0; cy < h - 0.5; cy += cell) {
+        var ex = Math.min(w, cx + cell), ey = Math.min(h, cy + cell);
+        x.moveTo(cx, cy); x.lineTo(ex, ey); x.moveTo(ex, cy); x.lineTo(cx, ey); }
+      x.stroke(); x.setLineDash([]);
+    }
+    x.lineWidth = lw * 1.6; x.strokeRect(lw * 0.8, lw * 0.8, w - lw * 1.6, h - lw * 1.6);   // the photo's edge
+  }
   function drawGridLayer() {
+    drawPhotoGrid();
     var c = $('gridLayer'), dpr = Math.min(3, window.devicePixelRatio || 1), W = window.innerWidth, H = window.innerHeight;
     c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
     var x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, W, H);
-    if (!S.grid) return;
+    if (!S.grid || S.gridOn !== 'screen') return;
     var col = COLORS[S.gridColor][1], sz = S.gridSize, ox = ((G.x % sz) + sz) % sz, oy = ((G.y % sz) + sz) % sz;
     x.strokeStyle = 'rgba(' + col.join(',') + ',' + (S.gridOpacity / 100) + ')'; x.lineWidth = 1.5;
     x.beginPath();
@@ -1098,6 +1166,9 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
   $('gridCol').addEventListener('click', function () { S.gridColor = (S.gridColor + 1) % COLORS.length; persist(); drawGridLayer(); syncUI(); });
   $('gridOpacity').addEventListener('input', function () { S.gridOpacity = +this.value; persist(); drawGridLayer(); });
   $('gridSize').addEventListener('input', function () { S.gridSize = +this.value; persist(); drawGridLayer(); });
+  $('gridCells').addEventListener('input', function () { S.gridCells = +this.value; persist(); drawGridLayer(); syncUI(); });
+  $('gridDiag').addEventListener('click', function () { S.gridDiag = !S.gridDiag; persist(); drawGridLayer(); syncUI(); });
+  $('gridOnSeg').querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { S.gridOn = b.dataset.v; persist(); drawGridLayer(); syncUI(); }); });
   // camera tab
   $('flipCam').addEventListener('click', function () {
     facing = facing === 'environment' ? 'user' : 'environment';
@@ -1147,8 +1218,9 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
       $('stepLabel').textContent = stepText(kind);
     }
     // bottom bar
-    if (!S.grid && target === 'grid') target = 'picture';
-    $('targets').hidden = !(move && S.grid);
+    var screenGrid = S.grid && S.gridOn === 'screen';
+    if (!screenGrid && target === 'grid') target = 'picture';
+    $('targets').hidden = !(move && screenGrid);
     $('targets').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.t === target ? 'true' : 'false'); });
     $('moveBtn').setAttribute('aria-pressed', move ? 'true' : 'false');
     $('hideBtn').textContent = hidden ? 'Show' : 'Hide'; $('hideBtn').setAttribute('aria-pressed', hidden ? 'true' : 'false');
@@ -1158,6 +1230,13 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
     syncLock();
     // other tools
     setSwitch('strobeSw', strobeOn); $('strobeSpeed').value = S.strobeSpeed;
+    $('gridOnSeg').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.v === S.gridOn ? 'true' : 'false'); });
+    $('gridCellsRow').hidden = S.gridOn !== 'photo'; $('gridSizeRow').hidden = S.gridOn !== 'screen';
+    $('gridCells').value = S.gridCells; $('gridCellsOut').textContent = S.gridCells;
+    $('gridDiag').hidden = S.gridOn !== 'photo'; $('gridDiag').setAttribute('aria-pressed', S.gridDiag ? 'true' : 'false');
+    $('gridNote').innerHTML = S.gridOn === 'photo'
+      ? 'The grid is fixed to the photo: it moves, scales and turns with it. Draw the same squares on your paper to check proportions and angles.'
+      : 'The grid stays on the screen. To drag it, turn on <b>Move</b> and choose <b>Grid</b> at the bottom.';
     setSwitch('gridSw', S.grid); $('gridOpacity').value = S.gridOpacity; $('gridSize').value = S.gridSize;
     $('gridDot').style.background = 'rgb(' + COLORS[S.gridColor][1].join(',') + ')';
     $('gridCol').querySelector('span').textContent = 'Colour: ' + COLORS[S.gridColor][0];

@@ -1,4 +1,7 @@
-# Trace Camera
+# NUMOTIFSTUDIO - Trace
+
+NU Motif Studio's camera tracing app, styled with the NU Motif design tokens (Oxblood: warm paper, wine accent, DM Sans).
+Brand assets are in `assets/` (white wordmark, app icons).
 
 A browser tool for tracing a picture onto paper. The phone's camera shows your paper live,
 and your chosen photo floats see-through on top, so you can draw while watching your pencil on screen.
@@ -29,8 +32,10 @@ and your chosen photo floats see-through on top, so you can draw while watching 
   A Locked badge shows the zoom; tap it to unlock. Double-tap to zoom back out. The browser's own page zoom is blocked.
 - AI sketch comes in three layers, traced in passes: 1 main lines, 2 secondary lines, 3 light lines and texture
   (strokes grouped by how firmly they are drawn). Show earlier steps (on by default) builds the steps up; off shows one step alone.
-- Strobe blinks the picture to compare with your drawing; the grid covers the screen with adjustable colour, opacity and
-  cell size; Camera can pause or switch cameras; Flashlight turns on the torch where the browser allows it.
+- **Grid on the photo** (default): square cells fixed to the picture, with its outline and optional diagonals. It moves,
+  scales, turns and mirrors with the photo, so proportions and perspective stay lined up while you place it. Choose how many
+  squares go across; Hide leaves the grid showing. A screen grid (fixed to the screen, draggable) is still available.
+- Strobe blinks the picture to compare with your drawing; the grid has adjustable colour and opacity; Camera can pause or switch cameras; Flashlight turns on the torch where the browser allows it.
 - Opacity, mirror and line colour; the screen is kept awake.
 
 Photos are processed on the device and never uploaded. Everything is in `index.html`; no build step.
