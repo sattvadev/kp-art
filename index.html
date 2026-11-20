@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0f1115">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Trace Camera</title>
+<style>
+/* A camera tracing tool: the live camera fills the screen, the picture floats on top,
+   controls sit in one bar at the bottom. Dark UI so the camera image stays the focus. */
+:root {
+  --bar: rgba(15, 17, 21, 0.86); --ink: #f2f3f6; --muted: #a3a9b8; --line: rgba(255,255,255,0.16);
+  --accent: #8ea4ff; --accent-ink: #10142a; --danger: #ff8a7a;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; background: #000; color: var(--ink);
+  font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+button, select, input { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+
+#video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
+#stage { position: fixed; inset: 0; touch-action: none; overflow: hidden; }
+#overlay { position: absolute; left: 50%; top: 50%; transform-origin: 50% 50%; pointer-events: none;
+  image-rendering: auto; will-change: transform, opacity; }
+
+/* start screen */
+#start { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: #0f1115;
+  padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); overflow-y: auto; }
+.card { width: min(440px, 100%); display: grid; gap: 18px; }
+.card h1 { margin: 0; font-size: 1.8rem; letter-spacing: -0.01em; }
+.card p { margin: 0; color: var(--muted); }
+.steps { margin: 0; padding-left: 1.2em; color: var(--muted); display: grid; gap: 6px; }
+.big { display: block; width: 100%; padding: 15px; border-radius: 12px; border: 1px solid var(--line);
+  background: #1b1f28; text-align: center; font-weight: 600; cursor: pointer; position: relative; overflow: hidden; }
+.big.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.big:disabled { opacity: .4; cursor: default; }
+.big input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+#thumbWrap { display: flex; align-items: center; gap: 12px; }
+#thumb { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+.msg { color: var(--danger); }
+
+/* bottom bar */
+#bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--bar);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-top: 1px solid var(--line);
+  padding: 10px max(12px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  display: grid; gap: 10px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.row.scroll { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.row.scroll::-webkit-scrollbar { display: none; }
+.chip { flex: none; border: 1px solid var(--line); background: rgba(255,255,255,0.06); border-radius: 999px;
+  padding: 8px 13px; cursor: pointer; white-space: nowrap; }
+.chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: rgba(255,255,255,0.05); flex: none; }
+.seg button { border: 0; background: transparent; padding: 7px 12px; border-radius: 999px; cursor: pointer; color: var(--muted); white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: #0f1115; font-weight: 600; }
+.slider { display: flex; align-items: center; gap: 10px; flex: 1 1 200px; min-width: 0; }
+.slider label { color: var(--muted); white-space: nowrap; }
+.slider input { flex: 1; min-width: 0; accent-color: var(--accent); }
+.stepper { display: flex; align-items: center; gap: 8px; flex: 1 1 260px; min-width: 0; }
+.stepper button { width: 44px; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,0.08); font-size: 1.3rem; cursor: pointer; flex: none; }
+.stepper button:disabled { opacity: .35; }
+#stepLabel { flex: 1; min-width: 0; font-weight: 600; font-size: .92rem; }
+#peek { font-weight: 600; }
+
+/* top-right floating buttons */
+#float { position: fixed; z-index: 21; top: calc(10px + env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right));
+  display: flex; gap: 8px; }
+#float button { border: 1px solid var(--line); background: var(--bar); border-radius: 999px; padding: 9px 13px; cursor: pointer;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+#float button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+#toast { position: fixed; z-index: 25; left: 50%; top: calc(14px + env(safe-area-inset-top)); transform: translateX(-50%);
+  background: var(--bar); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: .9rem; max-width: 70vw; text-align: center; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<video id="video" playsinline muted autoplay></video>
+<div id="stage"><canvas id="overlay"></canvas></div>
+
+<div id="float" hidden>
+  <button type="button" id="hideBar" aria-pressed="false">Hide controls</button>
+  <button type="button" id="lock" aria-pressed="false">Lock</button>
+</div>
+<div id="toast" hidden></div>
+
+<div id="bar" hidden>
+  <div class="row scroll" role="group" aria-label="What to trace">
+    <div class="seg" id="modeSeg">
+      <button type="button" data-v="photo" aria-pressed="true">Photo</button>
+      <button type="button" data-v="lines" aria-pressed="false">Outlines</button>
+      <button type="button" data-v="build" aria-pressed="false">Build up</button>
+      <button type="button" data-v="single" aria-pressed="false">One value</button>
+    </div>
+    <button type="button" class="chip" id="peek">Hold to peek</button>
+  </div>
+  <div class="row" id="valueRow" hidden>
+    <div class="stepper">
+      <button type="button" id="prev" aria-label="Previous step">‹</button>
+      <span id="stepLabel" aria-live="polite">Step 1</span>
+      <button type="button" id="next" aria-label="Next step">›</button>
+    </div>
+    <div class="slider"><label for="values">Values</label><input id="values" type="range" min="3" max="7" step="1" value="5"><output id="valuesOut">5</output></div>
+  </div>
+  <div class="row">
+    <div class="slider"><label for="opacity">See-through</label><input id="opacity" type="range" min="10" max="100" step="1" value="55"></div>
+  </div>
+  <div class="row scroll">
+    <button type="button" class="chip" id="fit">Fit to screen</button>
+    <button type="button" class="chip" id="mirror" aria-pressed="false">Mirror</button>
+    <button type="button" class="chip" id="grid" aria-pressed="false">Grid</button>
+    <button type="button" class="chip" id="color">Lines: black</button>
+    <button type="button" class="chip" id="torch" aria-pressed="false" hidden>Torch</button>
+    <button type="button" class="chip" id="newPhoto">New photo</button>
+  </div>
+</div>
+
+<section id="start" aria-labelledby="startTitle">
+  <div class="card">
+    <h1 id="startTitle">Trace Camera</h1>
+    <p>Your picture floats over the live camera, so you can trace it onto paper while watching your pencil on screen.</p>
+    <ol class="steps">
+      <li>Prop your phone 25–40 cm above the paper, camera facing down (a stand, a glass or a stack of books).</li>
+      <li>Choose a photo, then start the camera.</li>
+      <li>Drag and pinch the picture to fit the paper, then tap <b>Lock</b>.</li>
+      <li>Draw while looking at the screen. Hold <b>peek</b> to check your lines.</li>
+    </ol>
+    <div id="thumbWrap" hidden><img id="thumb" alt="Chosen photo"><span id="thumbName"></span></div>
+    <label class="big" for="file">Choose a photo<input type="file" id="file" accept="image/*"></label>
+    <button type="button" class="big primary" id="go" disabled>Start camera</button>
+    <p class="msg" id="err" hidden></p>
+    <p style="font-size:.85rem">Photos stay on your phone. Nothing is uploaded.</p>
+  </div>
+</section>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var MAX_SIDE = 1100;
+  var COLORS = [['black', [20, 18, 16]], ['white', [255, 255, 255]], ['red', [235, 45, 45]], ['blue', [40, 90, 255]]];
+  var NAMES = { 3: ['Paper', 'Mid', 'Darkest'], 4: ['Paper', 'Light', 'Dark', 'Darkest'],
+    5: ['Paper', 'Light', 'Mid', 'Dark', 'Darkest'], 6: ['Paper', 'Light', 'Light mid', 'Dark mid', 'Dark', 'Darkest'],
+    7: ['Paper', 'Pale', 'Light', 'Mid', 'Dark mid', 'Dark', 'Darkest'] };
+
+  var S = { mode: 'photo', values: 5, step: 1, opacity: 55, mirror: false, grid: false, color: 0 };
+  try { var sv = JSON.parse(localStorage.getItem('trace-camera') || 'null');
+    if (sv) ['mode', 'values', 'opacity', 'mirror', 'grid', 'color'].forEach(function (k) { if (k in sv) S[k] = sv[k]; }); } catch (e) {}
+  function persist() { try { localStorage.setItem('trace-camera', JSON.stringify(S)); } catch (e) {} }
+
+  var T = { x: 0, y: 0, scale: 1, rot: 0 };   // overlay placement on screen
+  var locked = false, stream = null, wake = null, torchOn = false;
+  var img = null, idx = null;                  // processed photo and its value map
+  var srcCanvas = document.createElement('canvas');
+  var overlay = $('overlay'), octx = overlay.getContext('2d');
+
+  function toast(t) { var el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(function () { el.hidden = true; }, 2200); }
+
+  // ---------- photo
+  $('file').addEventListener('change', function () {
+    var f = this.files && this.files[0]; if (!f) return;
+    var url = URL.createObjectURL(f), im = new Image();
+    im.onload = function () {
+      var sc = Math.min(1, MAX_SIDE / Math.max(im.naturalWidth, im.naturalHeight));
+      var w = Math.round(im.naturalWidth * sc), h = Math.round(im.naturalHeight * sc);
+      srcCanvas.width = w; srcCanvas.height = h;
+      var c = srcCanvas.getContext('2d'); c.drawImage(im, 0, 0, w, h);
+      var d = c.getImageData(0, 0, w, h).data, lum = new Float32Array(w * h);
+      for (var i = 0, p = 0; i < lum.length; i++, p += 4) lum[i] = (0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2]) / 255;
+      img = { w: w, h: h, lum: lum };
+      $('thumb').src = url; $('thumbName').textContent = f.name; $('thumbWrap').hidden = false;
+      $('go').disabled = false; $('err').hidden = true;
+      S.step = 1; idx = null;
+      if (!$('start').hidden) return;
+      process(); fit(); render();
+    };
+    im.onerror = function () { showErr('That file could not be opened as a picture. Try a JPG, PNG or HEIC photo.'); };
+    im.src = url;
+    this.value = '';
+  });
+  function showErr(t) { $('err').textContent = t; $('err').hidden = false; }
+
+  // ---------- camera
+  $('go').addEventListener('click', function () {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showErr('This browser cannot use the camera here. Open the page in Safari or Chrome over https.'); return;
+    }
+    navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } } })
+      .then(function (s) {
+        stream = s; var v = $('video'); v.srcObject = s;
+        var pl = v.play(); if (pl && pl.catch) pl.catch(function () {});
+        $('start').hidden = true; $('bar').hidden = false; $('float').hidden = false;
+        var track = s.getVideoTracks()[0], caps = track && track.getCapabilities ? track.getCapabilities() : {};
+        $('torch').hidden = !(caps && caps.torch);
+        keepAwake(); process(); fit(); render(); syncUI();
+      })
+      .catch(function (e) {
+        showErr(e && e.name === 'NotAllowedError'
+          ? 'Camera access was blocked. Allow the camera for this site in your browser settings, then try again.'
+          : 'The camera could not start (' + (e && e.name || 'error') + '). Close other apps using the camera and try again.');
+      });
+  });
+  function keepAwake() {
+    try { if (navigator.wakeLock) navigator.wakeLock.request('screen').then(function (l) { wake = l; }).catch(function () {}); } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && stream) keepAwake(); });
+  $('torch').addEventListener('click', function () {
+    var track = stream && stream.getVideoTracks()[0]; if (!track) return;
+    torchOn = !torchOn;
+    track.applyConstraints({ advanced: [{ torch: torchOn }] }).catch(function () { torchOn = false; toast('Torch not available'); });
+    this.setAttribute('aria-pressed', torchOn ? 'true' : 'false');
+  });
+  $('newPhoto').addEventListener('click', function () { $('file').click(); });
+
+  // ---------- value processing (same method as Value Builder)
+  function boxBlur(src, w, h, r) {
+    if (r < 1) return src.slice();
+    var a = src.slice(), b = new Float32Array(src.length), n = 2 * r + 1;
+    for (var pass = 0; pass < 3; pass++) {
+      for (var y = 0; y < h; y++) { var row = y * w, acc = 0;
+        for (var k = -r; k <= r; k++) acc += a[row + Math.min(w - 1, Math.max(0, k))];
+        for (var x = 0; x < w; x++) { b[row + x] = acc / n; acc += a[row + Math.min(w - 1, x + r + 1)] - a[row + Math.max(0, x - r)]; } }
+      for (var x2 = 0; x2 < w; x2++) { var acc2 = 0;
+        for (var k2 = -r; k2 <= r; k2++) acc2 += b[Math.min(h - 1, Math.max(0, k2)) * w + x2];
+        for (var y2 = 0; y2 < h; y2++) { a[y2 * w + x2] = acc2 / n; acc2 += b[Math.min(h - 1, y2 + r + 1) * w + x2] - b[Math.max(0, y2 - r) * w + x2]; } }
+    }
+    return a;
+  }
+  function majority(v, w, h, n) {
+    var out = new Uint8Array(v.length), cnt = new Uint8Array(n + 1);
+    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
+      cnt.fill(0);
+      for (var dy = -1; dy <= 1; dy++) { var yy = Math.min(h - 1, Math.max(0, y + dy));
+        for (var dx = -1; dx <= 1; dx++) cnt[v[yy * w + Math.min(w - 1, Math.max(0, x + dx))]]++; }
+      var best = v[y * w + x], bc = cnt[best];
+      for (var k = 1; k <= n; k++) if (cnt[k] > bc) { bc = cnt[k]; best = k; }
+      out[y * w + x] = best;
+    }
+    return out;
+  }
+  function process() {
+    if (!img) return;
+    var n = S.values, w = img.w, h = img.h;
+    var bl = boxBlur(img.lum, w, h, Math.round(6 * Math.max(w, h) / 1000));
+    var sample = []; for (var s = 0; s < bl.length; s += 7) sample.push(bl[s]);
+    sample.sort(function (a, b) { return a - b; });
+    var cuts = []; for (var q = 1; q < n; q++) cuts.push(sample[Math.floor(sample.length * q / n)]);
+    var v = new Uint8Array(w * h);
+    for (var i = 0; i < v.length; i++) { var dark = 0; for (var c = 0; c < cuts.length; c++) if (bl[i] < cuts[c]) dark++; v[i] = dark + 1; }
+    idx = majority(majority(v, w, h, n), w, h, n);
+  }
+
+  // ---------- draw the overlay (transparent where nothing is drawn)
+  function stepCount() { return S.mode === 'build' ? S.values - 1 : S.mode === 'single' ? S.values : 1; }
+  function render() {
+    if (!img) return;
+    var w = img.w, h = img.h; overlay.width = w; overlay.height = h;
+    if (S.mode === 'photo') { octx.drawImage(srcCanvas, 0, 0); drawGrid(); place(); return; }
+    if (!idx) process();
+    var out = octx.createImageData(w, h), o = out.data, n = S.values, k = S.step;
+    var col = COLORS[S.color][1], red = [235, 45, 45];
+    if (S.color === 2) red = [40, 90, 255];
+    // the value each pixel shows at this step, computed once
+    var sh = new Uint8Array(w * h);
+    for (var q = 0; q < sh.length; q++) { var vq = idx[q]; sh[q] = S.mode === 'build' ? Math.min(vq, k + 1) : S.mode === 'single' ? (vq === k ? 1 : 0) : vq; }
+    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
+      var j = y * w + x, p = j * 4, v = idx[j], shown = sh[j];
+      var r = 0, g = 0, b = 0, a = 0;
+      if (S.mode === 'build' && shown > 1) { r = col[0]; g = col[1]; b = col[2]; a = Math.round(255 * 0.85 * (shown - 1) / (n - 1)); }
+      if (S.mode === 'single' && shown) { r = col[0]; g = col[1]; b = col[2]; a = 150; }
+      // edges where the shown value changes
+      var edge = (x < w - 1 && sh[j + 1] !== shown) || (y < h - 1 && sh[j + w] !== shown) || (x > 0 && sh[j - 1] !== shown) || (y > 0 && sh[j - w] !== shown);
+      if (edge) { r = col[0]; g = col[1]; b = col[2]; a = 255; }
+      if (S.mode === 'build') {   // the shape to paint now, in a second colour
+        var t = k + 1, inS = v >= t;
+        if ((x < w - 1 && (idx[j + 1] >= t) !== inS) || (y < h - 1 && (idx[j + w] >= t) !== inS)) { r = red[0]; g = red[1]; b = red[2]; a = 255; }
+      }
+      o[p] = r; o[p + 1] = g; o[p + 2] = b; o[p + 3] = a;
+    }
+    octx.putImageData(out, 0, 0); drawGrid(); place();
+  }
+  function drawGrid() {
+    if (!S.grid) return;
+    var w = overlay.width, h = overlay.height, c = COLORS[S.color][1];
+    octx.save(); octx.strokeStyle = 'rgba(' + c.join(',') + ',0.9)'; octx.lineWidth = Math.max(2, Math.round(Math.max(w, h) / 400));
+    for (var i = 1; i < 4; i++) {
+      octx.beginPath(); octx.moveTo(w * i / 4, 0); octx.lineTo(w * i / 4, h); octx.stroke();
+      octx.beginPath(); octx.moveTo(0, h * i / 4); octx.lineTo(w, h * i / 4); octx.stroke();
+    }
+    octx.strokeRect(1, 1, w - 2, h - 2); octx.restore();
+  }
+
+  // ---------- placement and gestures
+  function fit() {
+    if (!img) return;
+    var W = window.innerWidth, H = window.innerHeight - ($('bar').hidden ? 0 : $('bar').offsetHeight);
+    T.scale = Math.min(W / img.w, H / img.h) * 0.92; T.x = 0; T.y = -($('bar').hidden ? 0 : $('bar').offsetHeight) / 2; T.rot = 0;
+    place();
+  }
+  function place() {
+    overlay.style.width = img.w + 'px'; overlay.style.height = img.h + 'px';
+    overlay.style.transform = 'translate(-50%, -50%) translate(' + T.x + 'px,' + T.y + 'px) rotate(' + T.rot + 'rad) scale(' + (S.mirror ? -T.scale : T.scale) + ',' + T.scale + ')';
+    overlay.style.opacity = S.opacity / 100;
+  }
+  var pts = new Map(), g = null;
+  var stage = $('stage');
+  function startGesture() {
+    var a = Array.from(pts.values());
+    if (a.length === 1) g = { one: true, x0: a[0].x, y0: a[0].y, tx: T.x, ty: T.y };
+    else if (a.length >= 2) {
+      var dx = a[1].x - a[0].x, dy = a[1].y - a[0].y;
+      g = { one: false, d0: Math.hypot(dx, dy), a0: Math.atan2(dy, dx), s0: T.scale, r0: T.rot,
+            mx0: (a[0].x + a[1].x) / 2, my0: (a[0].y + a[1].y) / 2, tx: T.x, ty: T.y };
+    }
+  }
+  stage.addEventListener('pointerdown', function (e) {
+    if (locked || !img) return;
+    try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); startGesture();
+  });
+  stage.addEventListener('pointermove', function (e) {
+    if (!pts.has(e.pointerId) || locked || !g) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    var a = Array.from(pts.values());
+    if (g.one && a.length === 1) { T.x = g.tx + a[0].x - g.x0; T.y = g.ty + a[0].y - g.y0; }
+    else if (!g.one && a.length >= 2) {
+      var dx = a[1].x - a[0].x, dy = a[1].y - a[0].y;
+      T.scale = Math.max(0.05, g.s0 * Math.hypot(dx, dy) / g.d0);
+      T.rot = g.r0 + Math.atan2(dy, dx) - g.a0;
+      T.x = g.tx + (a[0].x + a[1].x) / 2 - g.mx0; T.y = g.ty + (a[0].y + a[1].y) / 2 - g.my0;
+    }
+    place();
+  });
+  function endP(e) { if (!pts.has(e.pointerId)) return; pts.delete(e.pointerId); g = null; if (pts.size) startGesture(); }
+  stage.addEventListener('pointerup', endP); stage.addEventListener('pointercancel', endP);
+  stage.addEventListener('wheel', function (e) { if (locked || !img) return; e.preventDefault(); T.scale *= e.deltaY < 0 ? 1.05 : 1 / 1.05; place(); }, { passive: false });
+  document.addEventListener('gesturestart', function (e) { e.preventDefault(); });  // stop Safari zooming the page
+
+  // ---------- controls
+  function syncUI() {
+    $('modeSeg').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.v === S.mode ? 'true' : 'false'); });
+    $('valueRow').hidden = !(S.mode === 'build' || S.mode === 'single');
+    $('values').value = S.values; $('valuesOut').textContent = S.values; $('opacity').value = S.opacity;
+    $('mirror').setAttribute('aria-pressed', S.mirror ? 'true' : 'false');
+    $('grid').setAttribute('aria-pressed', S.grid ? 'true' : 'false');
+    $('color').textContent = 'Lines: ' + COLORS[S.color][0];
+    var n = S.values, k = S.step, cnt = stepCount();
+    $('stepLabel').textContent = S.mode === 'build' ? 'Step ' + k + ' of ' + (n - 1) + ': value ' + (k + 1) + ' (' + NAMES[n][k] + ')'
+      : 'Value ' + k + ' of ' + n + ': ' + NAMES[n][k - 1];
+    $('prev').disabled = k <= 1; $('next').disabled = k >= cnt;
+  }
+  function setMode(m) { S.mode = m; S.step = 1; persist(); render(); syncUI(); }
+  $('modeSeg').querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { setMode(b.dataset.v); }); });
+  $('prev').addEventListener('click', function () { if (S.step > 1) { S.step--; render(); syncUI(); } });
+  $('next').addEventListener('click', function () { if (S.step < stepCount()) { S.step++; render(); syncUI(); } });
+  $('values').addEventListener('input', function () { $('valuesOut').textContent = this.value; });
+  $('values').addEventListener('change', function () { S.values = +this.value; S.step = 1; persist(); process(); render(); syncUI(); });
+  $('opacity').addEventListener('input', function () { S.opacity = +this.value; persist(); place(); });
+  $('mirror').addEventListener('click', function () { S.mirror = !S.mirror; persist(); place(); syncUI(); });
+  $('grid').addEventListener('click', function () { S.grid = !S.grid; persist(); render(); syncUI(); });
+  $('color').addEventListener('click', function () { S.color = (S.color + 1) % COLORS.length; persist(); render(); syncUI(); });
+  $('fit').addEventListener('click', function () { if (locked) { toast('Unlock first to move the picture'); return; } fit(); });
+  $('lock').addEventListener('click', function () {
+    locked = !locked; this.setAttribute('aria-pressed', locked ? 'true' : 'false'); this.textContent = locked ? 'Locked' : 'Lock';
+    toast(locked ? 'Picture locked in place' : 'Picture unlocked: drag or pinch to move it');
+  });
+  $('hideBar').addEventListener('click', function () {
+    var hide = !$('bar').hidden; $('bar').hidden = hide;
+    this.setAttribute('aria-pressed', hide ? 'true' : 'false'); this.textContent = hide ? 'Show controls' : 'Hide controls';
+  });
+  function peek(on) { overlay.style.visibility = on ? 'hidden' : 'visible'; }
+  $('peek').addEventListener('pointerdown', function (e) { e.preventDefault(); peek(true); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (t) { $('peek').addEventListener(t, function () { peek(false); }); });
+  $('peek').addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  window.addEventListener('resize', function () { if (img && !locked) place(); });
+
+  syncUI();
+})();
+</script>
+</body>
+</html>
