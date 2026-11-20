@@ -9,7 +9,9 @@ and your chosen photo floats see-through on top, so you can draw while watching 
   or yellow). Layered fills the area painted at that step (that value and darker), Stencil fills exactly that value, All shows the greys.
   Numbered grey swatches pick the step, lightest (1) to darkest.
 - Values are found with an edge-preserving filter (keeps edges crisp, no halo rings), grouped by the photo's own tones,
-  then cleaned of slivers and specks so each value is a solid stencil. A Simplify slider trades detail for bolder shapes.
+  then cleaned of slivers and specks so each value is a solid stencil. A second 'details' pass from a lightly smoothed
+  photo keeps small features the broad shapes would flatten: eye openings, nostrils, ear holes, the lip line, catchlights.
+  A Simplify slider trades detail for bolder shapes.
 - Drag to move, pinch to resize and rotate, then Lock. Hold "peek" to check your lines.
 - See-through slider, mirror, grid, line colour, torch (where the phone supports it), screen kept awake.
 

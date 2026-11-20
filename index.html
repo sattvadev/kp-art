@@ -394,7 +394,33 @@ button, select, input { font: inherit; color: inherit; }
     for (var i = 0; i < v.length; i++) { var dark = 0; for (var c = 0; c < cuts.length; c++) if (q[i] < cuts[c]) dark++; v[i] = dark + 1; }  // 1 = lightest
     v = removeThin(v, w, h, n, Math.max(2, Math.round((2 + sp * 0.4) * scale)));
     v = modeFilter(v, w, h, n, Math.max(1, Math.round((1 + sp * 0.35) * scale)));
-    return removeIslands(v, w, h, n, Math.round(w * h * (0.0002 + sp * 0.00025)));
+    v = removeIslands(v, w, h, n, Math.round(w * h * (0.0002 + sp * 0.00025)));
+    return addDetails(lum, v, cuts, w, h, n, sp, scale);
+  }
+  // Second pass, like a painter's final 'darks and details': from a lightly smoothed photo, keep the
+  // small features the broad shapes flatten (eye openings, nostrils, ear holes, lip line, catchlights).
+  function addDetails(lum, v, cuts, w, h, n, sp, scale) {
+    var N = v.length, qf = guided(lum, w, h, Math.max(1, Math.round(1.5 * scale)), 0.0008), vf = new Uint8Array(N);
+    for (var i = 0; i < N; i++) { var dark = 0; for (var c = 0; c < cuts.length; c++) if (qf[i] < cuts[c]) dark++; vf[i] = dark + 1; }
+    vf = modeFilter(vf, w, h, n, 1);
+    var acc = new Uint8Array(N);
+    for (var j = 0; j < N; j++) {
+      var d = vf[j] - v[j];
+      // clearly darker than its broad shape (two steps, or one step into the two darkest values),
+      // or a small paper-white highlight inside a darker shape
+      if (d >= 2 || (d >= 1 && vf[j] >= n - 1) || (vf[j] === 1 && v[j] >= 3)) acc[j] = 1;
+    }
+    // drop speckles (skin texture), keep real features
+    var minA = Math.round((10 + sp * 6) * scale * scale), seen = new Uint8Array(N), stack = new Int32Array(N), comp = new Int32Array(N);
+    for (var s0 = 0; s0 < N; s0++) {
+      if (!acc[s0] || seen[s0]) continue;
+      var top = 0, size = 0; stack[top++] = s0; seen[s0] = 1;
+      while (top) { var p = stack[--top]; comp[size++] = p; var x = p % w;
+        var nb = [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, p - w, p + w];
+        for (var t = 0; t < 4; t++) { var q2 = nb[t]; if (q2 >= 0 && q2 < N && acc[q2] && !seen[q2]) { seen[q2] = 1; stack[top++] = q2; } } }
+      if (size >= minA) for (var z = 0; z < size; z++) v[comp[z]] = vf[comp[z]];
+    }
+    return v;
   }
   // VALUES-END
   function process() {
