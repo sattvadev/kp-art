@@ -3,7 +3,8 @@
 A browser tool for tracing a picture onto paper. The phone's camera shows your paper live,
 and your chosen photo floats see-through on top, so you can draw while watching your pencil on screen.
 
-- Modes: the photo itself, outlines of its value shapes, or **Values**: a breakdown strip of every value from lightest (1, paper) to darkest,
+- Modes: the photo itself, **Outlines** (a line drawing of the photo's real edges: eyes, nose, lips, jaw, hair, clothing,
+  jewellery, found in colour as well as brightness, with no lines across smooth gradients), or **Values**: a breakdown strip of every value from lightest (1, paper) to darkest,
   shown Layered (light to dark up to the chosen value, the new shape outlined in red), as a single Stencil, or All at once.
 - Values are found with an edge-preserving filter (keeps edges crisp, no halo rings), grouped by the photo's own tones,
   then cleaned of slivers and specks so each value is a solid stencil. A Simplify slider trades detail for bolder shapes.

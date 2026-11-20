@@ -113,10 +113,10 @@ button, select, input { font: inherit; color: inherit; }
     </div>
     <div class="strip" id="strip" role="group" aria-label="Values, lightest to darkest"></div>
     <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted);margin-top:-4px"><span>Lightest</span><span>Darkest →</span></div>
-    <div class="row" style="gap:14px">
-      <div class="slider"><label for="values">Values</label><input id="values" type="range" min="3" max="7" step="1" value="5"><output id="valuesOut">5</output></div>
-      <div class="slider"><label for="simplify">Simplify</label><input id="simplify" type="range" min="0" max="10" step="1" value="3"><output id="simplifyOut">3</output></div>
-    </div>
+    <div class="slider"><label for="values">Values</label><input id="values" type="range" min="3" max="7" step="1" value="5"><output id="valuesOut">5</output></div>
+  </div>
+  <div class="row" id="simplifyRow" hidden>
+    <div class="slider"><label for="simplify">Simplify</label><input id="simplify" type="range" min="0" max="10" step="1" value="3"><output id="simplifyOut">3</output></div>
   </div>
   <div class="row">
     <div class="slider"><label for="opacity">See-through</label><input id="opacity" type="range" min="10" max="100" step="1" value="55"></div>
@@ -168,7 +168,7 @@ button, select, input { font: inherit; color: inherit; }
 
   var T = { x: 0, y: 0, scale: 1, rot: 0 };   // overlay placement on screen
   var locked = false, stream = null, wake = null, torchOn = false;
-  var img = null, idx = null;                  // processed photo and its value map
+  var img = null, idx = null, lineMap = null;  // processed photo, its value map and its line drawing
   var srcCanvas = document.createElement('canvas');
   var overlay = $('overlay'), octx = overlay.getContext('2d');
 
@@ -185,10 +185,10 @@ button, select, input { font: inherit; color: inherit; }
       var c = srcCanvas.getContext('2d'); c.drawImage(im, 0, 0, w, h);
       var d = c.getImageData(0, 0, w, h).data, lum = new Float32Array(w * h);
       for (var i = 0, p = 0; i < lum.length; i++, p += 4) lum[i] = (0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2]) / 255;
-      img = { w: w, h: h, lum: lum };
+      img = { w: w, h: h, lum: lum, rgb: d };
       $('thumb').src = url; $('thumbName').textContent = f.name; $('thumbWrap').hidden = false;
       $('go').disabled = false; $('err').hidden = true;
-      S.step = 1; idx = null; $('strip').dataset.key = '';
+      S.step = 1; idx = null; lineMap = null; $('strip').dataset.key = '';
       if (!$('start').hidden) return;
       fit(); render(); syncUI();
     };
@@ -328,6 +328,58 @@ button, select, input { font: inherit; color: inherit; }
     for (var y = 0; y < N; y++) if (!out[y]) out[y] = v[y];
     return out;
   }
+  // Line drawing from real edges (Canny on an edge-preserved colour image): eyelids, nostrils,
+  // lip line, jaw, hairline, collar, jewellery. Smooth gradients make no lines.
+  // rgb: RGBA bytes. Returns 1 where a line is, else 0. simplify 0..10: 0 = most detail.
+  function computeLines(rgb, w, h, simplify) {
+    var N = w * h, sp = Math.max(0, Math.min(10, simplify)), scale = Math.max(w, h) / 1000;
+    var L = new Float32Array(N), A = new Float32Array(N), B = new Float32Array(N);
+    for (var i = 0, p = 0; i < N; i++, p += 4) {
+      var r = rgb[p] / 255, g = rgb[p + 1] / 255, b = rgb[p + 2] / 255;
+      L[i] = 0.299 * r + 0.587 * g + 0.114 * b; A[i] = (r - g) * 0.8; B[i] = ((r + g) / 2 - b) * 0.8;   // brightness + two colour axes
+    }
+    var rad = Math.max(2, Math.round((2 + sp * 0.9) * scale)), eps = 0.0006 + sp * 0.0009;
+    var ch = [guided(L, w, h, rad, eps), guided(A, w, h, rad, eps * 0.5), guided(B, w, h, rad, eps * 0.5)];
+    // Sobel on each channel; keep the strongest channel's gradient per pixel
+    var mag = new Float32Array(N), sec = new Uint8Array(N);
+    for (var y = 1; y < h - 1; y++) for (var x = 1; x < w - 1; x++) {
+      var j = y * w + x, best = 0, bx = 0, by = 0;
+      for (var c = 0; c < 3; c++) { var q = ch[c];
+        var gx = (q[j - w + 1] + 2 * q[j + 1] + q[j + w + 1]) - (q[j - w - 1] + 2 * q[j - 1] + q[j + w - 1]);
+        var gy = (q[j + w - 1] + 2 * q[j + w] + q[j + w + 1]) - (q[j - w - 1] + 2 * q[j - w] + q[j - w + 1]);
+        var m = gx * gx + gy * gy; if (m > best) { best = m; bx = gx; by = gy; } }
+      mag[j] = Math.sqrt(best);
+      var ang = Math.atan2(by, bx) * 180 / Math.PI; if (ang < 0) ang += 180;
+      sec[j] = ang < 22.5 || ang >= 157.5 ? 0 : ang < 67.5 ? 1 : ang < 112.5 ? 2 : 3;
+    }
+    // thin every edge to one pixel: keep only the peak across the edge
+    var nms = new Float32Array(N), vals = [];
+    var off = [[-1, 1], [-w - 1, w + 1], [-w, w], [-w + 1, w - 1]];
+    for (var y2 = 1; y2 < h - 1; y2++) for (var x2 = 1; x2 < w - 1; x2++) {
+      var k = y2 * w + x2, m0 = mag[k]; if (m0 <= 0) continue;
+      var o = off[sec[k]];
+      if (m0 >= mag[k + o[0]] && m0 > mag[k + o[1]]) { nms[k] = m0; if ((k & 3) === 0) vals.push(m0); }
+    }
+    vals.sort(function (a, b) { return a - b; });
+    var keepTop = 0.16 - sp * 0.011;   // share of edge points that count as strong: 16% at most detail, 5% at simplest
+    var hi = vals.length ? vals[Math.min(vals.length - 1, Math.floor(vals.length * (1 - keepTop)))] : 1, lo = hi * 0.4;
+    // hysteresis: strong edges, plus weak edges that connect to them
+    var edge = new Uint8Array(N), stack = new Int32Array(N), top = 0;
+    for (var z = 0; z < N; z++) if (nms[z] >= hi && !edge[z]) { edge[z] = 1; stack[top++] = z; }
+    var nb8 = [-1, 1, -w, w, -w - 1, -w + 1, w - 1, w + 1];
+    while (top) { var e = stack[--top];
+      for (var t = 0; t < 8; t++) { var f = e + nb8[t]; if (f >= 0 && f < N && !edge[f] && nms[f] >= lo) { edge[f] = 1; stack[top++] = f; } } }
+    // drop short fragments so what is left is worth tracing
+    var minLen = Math.round((12 + sp * 7) * scale), seen = new Uint8Array(N), comp = new Int32Array(N);
+    for (var s0 = 0; s0 < N; s0++) {
+      if (!edge[s0] || seen[s0]) continue;
+      var size = 0; top = 0; stack[top++] = s0; seen[s0] = 1;
+      while (top) { var u = stack[--top]; comp[size++] = u;
+        for (var t2 = 0; t2 < 8; t2++) { var v2 = u + nb8[t2]; if (v2 >= 0 && v2 < N && edge[v2] && !seen[v2]) { seen[v2] = 1; stack[top++] = v2; } } }
+      if (size < minLen) for (var zz = 0; zz < size; zz++) edge[comp[zz]] = 0;
+    }
+    return edge;
+  }
   // lum: brightness 0..1 per pixel. Returns value per pixel, 1 = lightest .. n = darkest.
   // simplify 0..10: 0 keeps detail, 10 gives big bold shapes.
   function computeValues(lum, w, h, n, simplify) {
@@ -343,11 +395,13 @@ button, select, input { font: inherit; color: inherit; }
   // VALUES-END
   function process() {
     if (!img) return;
-    idx = computeValues(img.lum, img.w, img.h, S.values, S.simplify);
+    // lines keep more detail than values at the same slider position (slider 3 = line setting 2.1)
+    if (S.mode === 'lines') { if (!lineMap) lineMap = computeLines(img.rgb, img.w, img.h, S.simplify * 0.7); }
+    else if (!idx) idx = computeValues(img.lum, img.w, img.h, S.values, S.simplify);
   }
   // Recompute values after the 'working' message has had a chance to paint.
   function reprocess(after) {
-    toast('Working out the values…');
+    toast(S.mode === 'lines' ? 'Drawing the outlines…' : 'Working out the values…');
     setTimeout(function () { process(); $('strip').dataset.key = ''; after(); $('toast').hidden = true; }, 40);
   }
 
@@ -387,8 +441,24 @@ button, select, input { font: inherit; color: inherit; }
     if (!img) return;
     var w = img.w, h = img.h; overlay.width = w; overlay.height = h;
     if (S.mode === 'photo') { octx.drawImage(srcCanvas, 0, 0); drawGrid(); place(); return; }
+    if (S.mode === 'lines') {
+      if (!lineMap) { reprocess(function () { render(); syncUI(); }); return; }   // worked out on first need
+      octx.putImageData(lineImage(), 0, 0); drawGrid(); place(); return;
+    }
     if (!idx) { reprocess(function () { render(); syncUI(); }); return; }   // values are worked out on first need
     octx.putImageData(buildImage(S.mode, S.view, S.step), 0, 0); drawGrid(); place();
+  }
+  // The line drawing as an overlay: lines about 3 px wide at working size, transparent elsewhere.
+  function lineImage() {
+    var w = img.w, h = img.h, out = octx.createImageData(w, h), o = out.data, col = COLORS[S.color][1];
+    var r = Math.max(1, Math.round(1.2 * Math.max(w, h) / 1000));
+    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
+      if (!lineMap[y * w + x]) continue;
+      for (var dy = -r; dy <= r; dy++) { var yy = y + dy; if (yy < 0 || yy >= h) continue;
+        for (var dx = -r; dx <= r; dx++) { var xx = x + dx; if (xx < 0 || xx >= w || dx * dx + dy * dy > r * r + 1) continue;
+          var p = (yy * w + xx) * 4; o[p] = col[0]; o[p + 1] = col[1]; o[p + 2] = col[2]; o[p + 3] = 255; } }
+    }
+    return out;
   }
   // The breakdown strip: one small stencil per value, lightest first.
   function buildStrip() {
@@ -474,6 +544,7 @@ button, select, input { font: inherit; color: inherit; }
     $('modeSeg').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.v === S.mode ? 'true' : 'false'); });
     $('viewSeg').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.v === S.view ? 'true' : 'false'); });
     $('valueRow').hidden = S.mode !== 'values';
+    $('simplifyRow').hidden = S.mode === 'photo';
     $('values').value = S.values; $('valuesOut').textContent = S.values; $('opacity').value = S.opacity;
     $('simplify').value = S.simplify; $('simplifyOut').textContent = S.simplify;
     $('mirror').setAttribute('aria-pressed', S.mirror ? 'true' : 'false');
@@ -493,8 +564,8 @@ button, select, input { font: inherit; color: inherit; }
   $('viewSeg').querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { S.view = b.dataset.v; persist(); render(); syncUI(); }); });
   $('values').addEventListener('input', function () { $('valuesOut').textContent = this.value; });
   $('simplify').addEventListener('input', function () { $('simplifyOut').textContent = this.value; });
-  $('simplify').addEventListener('change', function () { S.simplify = +this.value; persist(); reprocess(function () { render(); syncUI(); }); });
-  $('values').addEventListener('change', function () { S.values = +this.value; S.step = Math.min(S.step, S.values); persist(); reprocess(function () { render(); syncUI(); }); });
+  $('simplify').addEventListener('change', function () { S.simplify = +this.value; idx = null; lineMap = null; persist(); reprocess(function () { render(); syncUI(); }); });
+  $('values').addEventListener('change', function () { S.values = +this.value; S.step = Math.min(S.step, S.values); idx = null; persist(); reprocess(function () { render(); syncUI(); }); });
   $('opacity').addEventListener('input', function () { S.opacity = +this.value; persist(); place(); });
   $('mirror').addEventListener('click', function () { S.mirror = !S.mirror; persist(); place(); syncUI(); });
   $('grid').addEventListener('click', function () { S.grid = !S.grid; persist(); render(); syncUI(); });
