@@ -332,57 +332,87 @@ button, select, input { font: inherit; color: inherit; }
     for (var y = 0; y < N; y++) if (!out[y]) out[y] = v[y];
     return out;
   }
-  // Line drawing from real edges (Canny on an edge-preserved colour image): eyelids, nostrils,
-  // lip line, jaw, hairline, collar, jewellery. Smooth gradients make no lines.
-  // rgb: RGBA bytes. Returns 1 where a line is, else 0. simplify 0..10: 0 = most detail.
-  function computeLines(rgb, w, h, simplify) {
-    var N = w * h, sp = Math.max(0, Math.min(10, simplify)), scale = Math.max(w, h) / 1000;
-    var L = new Float32Array(N), A = new Float32Array(N), B = new Float32Array(N);
-    for (var i = 0, p = 0; i < N; i++, p += 4) {
-      var r = rgb[p] / 255, g = rgb[p + 1] / 255, b = rgb[p + 2] / 255;
-      L[i] = 0.299 * r + 0.587 * g + 0.114 * b; A[i] = (r - g) * 0.8; B[i] = ((r + g) / 2 - b) * 0.8;   // brightness + two colour axes
+  // Sketch strokes in the style of Coherent Line Drawing (Kang et al. 2007) with XDoG-style soft
+  // thresholding (Winnemoeller et al. 2012): find the direction the form flows at every point
+  // (edge tangent flow), then draw along that flow, so lines are long and continuous, thicker on
+  // strong edges and tapering on weak ones. Returns ink 0..1 per pixel (soft, anti-aliased).
+  function computeSketch(lum, w, h, simplify) {
+    var N = w * h, sp = Math.max(0, Math.min(10, simplify)), scale = Math.max(w, h) / 1000, x, y, i;
+    // 1. light pre-blur, gradient, initial tangents (perpendicular to the gradient)
+    var I = boxMean(boxMean(lum, w, h, 1), w, h, 1);
+    var tx = new Float32Array(N), ty = new Float32Array(N), gm = new Float32Array(N), gmax = 1e-6;
+    for (y = 1; y < h - 1; y++) for (x = 1; x < w - 1; x++) { i = y * w + x;
+      var gx = (I[i - w + 1] + 2 * I[i + 1] + I[i + w + 1]) - (I[i - w - 1] + 2 * I[i - 1] + I[i + w - 1]);
+      var gy = (I[i + w - 1] + 2 * I[i + w] + I[i + w + 1]) - (I[i - w - 1] + 2 * I[i - w] + I[i - w + 1]);
+      var m = Math.sqrt(gx * gx + gy * gy); gm[i] = m; if (m > gmax) gmax = m;
+      if (m > 1e-6) { tx[i] = -gy / m; ty[i] = gx / m; } }
+    for (i = 0; i < N; i++) gm[i] /= gmax;
+    // 2. edge tangent flow: smooth the tangents, letting strong edges steer weak ones (separable passes)
+    var R = Math.max(3, Math.round(5 * scale)), ntx = new Float32Array(N), nty = new Float32Array(N);
+    function etfPass(horizontal) {
+      for (y = 0; y < h; y++) for (x = 0; x < w; x++) { i = y * w + x;
+        var cx = tx[i], cy = ty[i], has = cx !== 0 || cy !== 0, sx = 0, sy = 0;
+        for (var d = -R; d <= R; d++) {
+          var xx = horizontal ? x + d : x, yy = horizontal ? y : y + d;
+          if (xx < 0 || xx >= w || yy < 0 || yy >= h) continue;
+          var j = yy * w + xx, ux = tx[j], uy = ty[j]; if (ux === 0 && uy === 0) continue;
+          var dot = has ? cx * ux + cy * uy : 1, phi = dot < 0 ? -1 : 1;
+          var wm = (1 + Math.tanh(2 * (gm[j] - gm[i]))) / 2, wd = has ? Math.abs(dot) : 1;
+          sx += phi * wm * wd * ux; sy += phi * wm * wd * uy; }
+        var l = Math.sqrt(sx * sx + sy * sy); if (l > 1e-9) { ntx[i] = sx / l; nty[i] = sy / l; } else { ntx[i] = cx; nty[i] = cy; } }
+      var a = tx; tx = ntx; ntx = a; a = ty; ty = nty; nty = a;
     }
-    var rad = Math.max(2, Math.round((2 + sp * 0.9) * scale)), eps = 0.0006 + sp * 0.0009;
-    var ch = [guided(L, w, h, rad, eps), guided(A, w, h, rad, eps * 0.5), guided(B, w, h, rad, eps * 0.5)];
-    // Sobel on each channel; keep the strongest channel's gradient per pixel
-    var mag = new Float32Array(N), sec = new Uint8Array(N);
-    for (var y = 1; y < h - 1; y++) for (var x = 1; x < w - 1; x++) {
-      var j = y * w + x, best = 0, bx = 0, by = 0;
-      for (var c = 0; c < 3; c++) { var q = ch[c];
-        var gx = (q[j - w + 1] + 2 * q[j + 1] + q[j + w + 1]) - (q[j - w - 1] + 2 * q[j - 1] + q[j + w - 1]);
-        var gy = (q[j + w - 1] + 2 * q[j + w] + q[j + w + 1]) - (q[j - w - 1] + 2 * q[j - w] + q[j - w + 1]);
-        var m = gx * gx + gy * gy; if (m > best) { best = m; bx = gx; by = gy; } }
-      mag[j] = Math.sqrt(best);
-      var ang = Math.atan2(by, bx) * 180 / Math.PI; if (ang < 0) ang += 180;
-      sec[j] = ang < 22.5 || ang >= 157.5 ? 0 : ang < 67.5 ? 1 : ang < 112.5 ? 2 : 3;
+    for (var it = 0; it < 2; it++) { etfPass(true); etfPass(false); }
+    // 3. flow-based DoG: across the edge, a centre-minus-surround Gaussian (lines = negative response)
+    var sc = (0.9 + sp * 0.12) * scale, ss = 1.6 * sc, rho = 0.995, T = Math.ceil(ss * 2.5);
+    var kw = [], ksum1 = 0, ksum2 = 0;
+    for (var s = -T; s <= T; s++) { var g1 = Math.exp(-s * s / (2 * sc * sc)), g2 = Math.exp(-s * s / (2 * ss * ss)); kw.push([g1, g2]); ksum1 += g1; ksum2 += g2; }
+    function bil(A, px, py) {
+      if (px < 0) px = 0; if (py < 0) py = 0; if (px > w - 1.001) px = w - 1.001; if (py > h - 1.001) py = h - 1.001;
+      var x0 = px | 0, y0 = py | 0, fx = px - x0, fy = py - y0, k = y0 * w + x0;
+      return (A[k] * (1 - fx) + A[k + 1] * fx) * (1 - fy) + (A[k + w] * (1 - fx) + A[k + w + 1] * fx) * fy;
     }
-    // thin every edge to one pixel: keep only the peak across the edge
-    var nms = new Float32Array(N), vals = [];
-    var off = [[-1, 1], [-w - 1, w + 1], [-w, w], [-w + 1, w - 1]];
-    for (var y2 = 1; y2 < h - 1; y2++) for (var x2 = 1; x2 < w - 1; x2++) {
-      var k = y2 * w + x2, m0 = mag[k]; if (m0 <= 0) continue;
-      var o = off[sec[k]];
-      if (m0 >= mag[k + o[0]] && m0 > mag[k + o[1]]) { nms[k] = m0; if ((k & 3) === 0) vals.push(m0); }
-    }
-    vals.sort(function (a, b) { return a - b; });
-    var keepTop = 0.16 - sp * 0.011;   // share of edge points that count as strong: 16% at most detail, 5% at simplest
-    var hi = vals.length ? vals[Math.min(vals.length - 1, Math.floor(vals.length * (1 - keepTop)))] : 1, lo = hi * 0.4;
-    // hysteresis: strong edges, plus weak edges that connect to them
-    var edge = new Uint8Array(N), stack = new Int32Array(N), top = 0;
-    for (var z = 0; z < N; z++) if (nms[z] >= hi && !edge[z]) { edge[z] = 1; stack[top++] = z; }
-    var nb8 = [-1, 1, -w, w, -w - 1, -w + 1, w - 1, w + 1];
-    while (top) { var e = stack[--top];
-      for (var t = 0; t < 8; t++) { var f = e + nb8[t]; if (f >= 0 && f < N && !edge[f] && nms[f] >= lo) { edge[f] = 1; stack[top++] = f; } } }
-    // drop short fragments so what is left is worth tracing
-    var minLen = Math.round((12 + sp * 7) * scale), seen = new Uint8Array(N), comp = new Int32Array(N);
+    var F = new Float32Array(N);
+    for (y = 0; y < h; y++) for (x = 0; x < w; x++) { i = y * w + x;
+      var nx = ty[i], ny = -tx[i]; if (nx === 0 && ny === 0) nx = 1;   // gradient direction
+      var a1 = 0, a2 = 0;
+      for (var q = 0; q < kw.length; q++) { var st = q - T, v = bil(I, x + st * nx, y + st * ny); a1 += v * kw[q][0]; a2 += v * kw[q][1]; }
+      F[i] = a1 / ksum1 - rho * a2 / ksum2; }
+    // 4. integrate along the flow, so each stroke is smoothed lengthwise into one continuous line
+    var sm = (2.5 + sp * 0.35) * scale, S = Math.ceil(sm * 2), Hh = new Float32Array(N);
+    var gw = []; for (var k2 = 0; k2 <= S; k2++) gw.push(Math.exp(-k2 * k2 / (2 * sm * sm)));
+    for (y = 0; y < h; y++) for (x = 0; x < w; x++) { i = y * w + x;
+      var acc = F[i] * gw[0], wsum = gw[0];
+      for (var dir = -1; dir <= 1; dir += 2) {
+        var px = x, py = y, dx = tx[i] * dir, dy = ty[i] * dir;
+        for (var k3 = 1; k3 <= S; k3++) {
+          px += dx; py += dy; if (px < 0 || py < 0 || px >= w - 1 || py >= h - 1) break;
+          acc += bil(F, px, py) * gw[k3]; wsum += gw[k3];
+          var jj = (Math.round(py) * w + Math.round(px)), ndx = tx[jj], ndy = ty[jj];
+          if (ndx * dx + ndy * dy < 0) { ndx = -ndx; ndy = -ndy; }
+          if (ndx !== 0 || ndy !== 0) { dx = ndx; dy = ndy; } } }
+      Hh[i] = acc / wsum; }
+    // 5. soft threshold, normalised to this photo so it works for light and dark images alike
+    var neg = []; for (i = 0; i < N; i += 3) if (Hh[i] < 0) neg.push(-Hh[i]);
+    neg.sort(function (a, b) { return a - b; });
+    var ref = neg.length ? neg[Math.floor(neg.length * 0.97)] : 1, lo = 0.07 + sp * 0.03, hi = lo + 0.3;
+    var ink = new Float32Array(N);
+    for (i = 0; i < N; i++) { var d0 = -Hh[i] / ref; if (d0 > lo) { var u = Math.min(1, (d0 - lo) / (hi - lo)); ink[i] = u * u * (3 - 2 * u); } }
+    // 6. drop short scraps so what is left is worth drawing
+    var minLen = Math.round((25 + sp * 12) * scale * scale), seen = new Uint8Array(N), stack = new Int32Array(N), comp = new Int32Array(N);
     for (var s0 = 0; s0 < N; s0++) {
-      if (!edge[s0] || seen[s0]) continue;
-      var size = 0; top = 0; stack[top++] = s0; seen[s0] = 1;
-      while (top) { var u = stack[--top]; comp[size++] = u;
-        for (var t2 = 0; t2 < 8; t2++) { var v2 = u + nb8[t2]; if (v2 >= 0 && v2 < N && edge[v2] && !seen[v2]) { seen[v2] = 1; stack[top++] = v2; } } }
-      if (size < minLen) for (var zz = 0; zz < size; zz++) edge[comp[zz]] = 0;
+      if (ink[s0] < 0.35 || seen[s0]) continue;
+      var top = 0, size = 0; stack[top++] = s0; seen[s0] = 1;
+      while (top) { var p0 = stack[--top]; comp[size++] = p0; var x0 = p0 % w;
+        var nb = [x0 > 0 ? p0 - 1 : -1, x0 < w - 1 ? p0 + 1 : -1, p0 - w, p0 + w];
+        for (var t2 = 0; t2 < 4; t2++) { var q2 = nb[t2]; if (q2 >= 0 && q2 < N && ink[q2] >= 0.35 && !seen[q2]) { seen[q2] = 1; stack[top++] = q2; } } }
+      if (size < minLen) for (var z = 0; z < size; z++) ink[comp[z]] = 0;
     }
-    return edge;
+    for (i = 0; i < N; i++) if (ink[i] > 0 && ink[i] < 0.35 && !seen[i]) {   // faint fringe only next to kept strokes
+      var xx2 = i % w, keep = false;
+      for (var dd = -1; dd <= 1 && !keep; dd++) for (var ee = -1; ee <= 1; ee++) { var nn = i + dd * w + ee; if (nn >= 0 && nn < N && seen[nn] && ink[nn] >= 0.35) { keep = true; break; } }
+      if (!keep) ink[i] = 0; }
+    return ink;
   }
   // lum: brightness 0..1 per pixel. Returns value per pixel, 1 = lightest .. n = darkest.
   // simplify 0..10: 0 keeps detail, 10 gives big bold shapes.
@@ -425,8 +455,7 @@ button, select, input { font: inherit; color: inherit; }
   // VALUES-END
   function process() {
     if (!img) return;
-    // lines keep more detail than values at the same slider position (slider 3 = line setting 2.1)
-    if (S.mode === 'lines') { if (!lineMap) lineMap = computeLines(img.rgb, img.w, img.h, S.simplify * 0.7); }
+    if (S.mode === 'lines') { if (!lineMap) lineMap = computeSketch(img.lum, img.w, img.h, S.simplify); }
     else if (!idx) idx = computeValues(img.lum, img.w, img.h, S.values, S.simplify);
   }
   // Recompute values after the 'working' message has had a chance to paint.
@@ -442,19 +471,28 @@ button, select, input { font: inherit; color: inherit; }
   //  layered: the area painted at step k (value k and everything darker; at k = 1 the paper shapes)
   //  stencil: exactly value k;  all: greys only
   function buildImage(mode, view, k) {
-    var w = img.w, h = img.h, n = S.values, out = octx.createImageData(w, h), o = out.data;
+    var w = img.w, h = img.h, n = S.values, N = w * h, out = octx.createImageData(w, h), o = out.data;
     var hl = HL[S.hl][1], edgeCol = [Math.round(hl[0] * 0.55), Math.round(hl[1] * 0.55), Math.round(hl[2] * 0.55)];
-    var on = new Uint8Array(w * h);
-    if (view !== 'all') for (var q = 0; q < on.length; q++) { var v0 = idx[q];
-      on[q] = view === 'stencil' ? (v0 === k ? 1 : 0) : (k === 1 ? (v0 === 1 ? 1 : 0) : (v0 >= k ? 1 : 0)); }
-    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
-      var j = y * w + x, p = j * 4, gv = greyOf(idx[j], n), r = gv, g = gv, b = gv;
-      if (on[j]) {
-        r = hl[0]; g = hl[1]; b = hl[2];
-        var edge = (x < w - 1 && !on[j + 1]) || (y < h - 1 && !on[j + w]) || (x > 0 && !on[j - 1]) || (y > 0 && !on[j - w]);
-        if (edge) { r = edgeCol[0]; g = edgeCol[1]; b = edgeCol[2]; }   // a darker rim so the shape is easy to trace
+    var scale = Math.max(w, h) / 1000, rr = Math.max(1, Math.round(1.5 * scale));
+    // greys, with joins softened by a pixel so they do not step
+    var g0 = new Float32Array(N); for (var i = 0; i < N; i++) g0[i] = greyOf(idx[i], n);
+    var gs = boxMean(g0, w, h, 1);
+    var soft = null;
+    if (view !== 'all') {
+      var on = new Float32Array(N);
+      for (var q = 0; q < N; q++) { var v0 = idx[q];
+        on[q] = view === 'stencil' ? (v0 === k ? 1 : 0) : (k === 1 ? (v0 === 1 ? 1 : 0) : (v0 >= k ? 1 : 0)); }
+      soft = boxMean(boxMean(on, w, h, rr), w, h, rr);   // rounds the pixel steps off the shape's edge
+    }
+    for (var j = 0; j < N; j++) {
+      var p = j * 4, g = gs[j], r = g, gg = g, b = g;
+      if (soft) {
+        var sv = soft[j], f = sv <= 0.38 ? 0 : sv >= 0.62 ? 1 : (function (u) { return u * u * (3 - 2 * u); })((sv - 0.38) / 0.24);
+        r = g + (hl[0] - g) * f; gg = g + (hl[1] - g) * f; b = g + (hl[2] - g) * f;
+        var rim = 1 - Math.abs(sv - 0.5) / 0.2;                        // a smooth contour stroke along the edge
+        if (rim > 0) { rim = Math.min(1, rim) * 0.9; r += (edgeCol[0] - r) * rim; gg += (edgeCol[1] - gg) * rim; b += (edgeCol[2] - b) * rim; }
       }
-      o[p] = r; o[p + 1] = g; o[p + 2] = b; o[p + 3] = 255;
+      o[p] = r; o[p + 1] = gg; o[p + 2] = b; o[p + 3] = 255;
     }
     return out;
   }
@@ -472,13 +510,8 @@ button, select, input { font: inherit; color: inherit; }
   // The line drawing as an overlay: lines about 3 px wide at working size, transparent elsewhere.
   function lineImage() {
     var w = img.w, h = img.h, out = octx.createImageData(w, h), o = out.data, col = COLORS[S.color][1];
-    var r = Math.max(1, Math.round(1.2 * Math.max(w, h) / 1000));
-    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
-      if (!lineMap[y * w + x]) continue;
-      for (var dy = -r; dy <= r; dy++) { var yy = y + dy; if (yy < 0 || yy >= h) continue;
-        for (var dx = -r; dx <= r; dx++) { var xx = x + dx; if (xx < 0 || xx >= w || dx * dx + dy * dy > r * r + 1) continue;
-          var p = (yy * w + xx) * 4; o[p] = col[0]; o[p + 1] = col[1]; o[p + 2] = col[2]; o[p + 3] = 255; } }
-    }
+    for (var j = 0; j < w * h; j++) { var a = lineMap[j]; if (!a) continue;
+      var p = j * 4; o[p] = col[0]; o[p + 1] = col[1]; o[p + 2] = col[2]; o[p + 3] = Math.round(255 * a); }
     return out;
   }
   // The breakdown strip: one small stencil per value, lightest first.
