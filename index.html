@@ -62,11 +62,12 @@ button, select, input { font: inherit; color: inherit; }
 .stepper button:disabled { opacity: .35; }
 #stepLabel { flex: 1; min-width: 0; font-weight: 600; font-size: .92rem; }
 #peek { font-weight: 600; }
-.strip { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(58px, 1fr); gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.strip { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(50px, 1fr); gap: 6px; overflow-x: auto; scrollbar-width: none; }
 .strip::-webkit-scrollbar { display: none; }
 .vbtn { display: grid; gap: 3px; justify-items: center; padding: 4px; border-radius: 10px; border: 2px solid transparent;
   background: rgba(255,255,255,0.05); cursor: pointer; min-width: 0; }
-.vbtn canvas { width: 100%; height: auto; max-height: 72px; object-fit: contain; border-radius: 5px; background: #f4f1ea; display: block; }
+.vbtn i { display: grid; place-items: center; width: 100%; aspect-ratio: 1 / 1; max-height: 46px; border-radius: 7px;
+  font-style: normal; font-weight: 700; font-size: 1rem; border: 1px solid rgba(255,255,255,0.18); }
 .vbtn span { font-size: .72rem; line-height: 1.1; color: var(--muted); white-space: nowrap; }
 .vbtn span b { color: var(--ink); }
 .vbtn[aria-pressed="true"] { border-color: var(--accent); background: rgba(142,164,255,0.16); }
@@ -109,8 +110,9 @@ button, select, input { font: inherit; color: inherit; }
         <button type="button" data-v="stencil" aria-pressed="false">Stencil</button>
         <button type="button" data-v="all" aria-pressed="false">All</button>
       </div>
-      <span id="stepLabel" aria-live="polite" style="font-weight:600;font-size:.9rem;white-space:nowrap">Value 1</span>
+      <button type="button" class="chip" id="hl">Colour: coral</button>
     </div>
+    <div id="stepLabel" aria-live="polite" style="font-weight:600;font-size:.92rem">Value 1</div>
     <div class="strip" id="strip" role="group" aria-label="Values, lightest to darkest"></div>
     <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted);margin-top:-4px"><span>Lightest</span><span>Darkest →</span></div>
     <div class="slider"><label for="values">Values</label><input id="values" type="range" min="3" max="7" step="1" value="5"><output id="valuesOut">5</output></div>
@@ -156,13 +158,15 @@ button, select, input { font: inherit; color: inherit; }
   var $ = function (id) { return document.getElementById(id); };
   var MAX_SIDE = 1100;
   var COLORS = [['black', [20, 18, 16]], ['white', [255, 255, 255]], ['red', [235, 45, 45]], ['blue', [40, 90, 255]]];
+  // breakdown highlight colours
+  var HL = [['coral', [242, 104, 84]], ['blue', [58, 112, 240]], ['green', [36, 168, 96]], ['yellow', [246, 196, 38]]];
   var NAMES = { 3: ['Paper', 'Mid', 'Darkest'], 4: ['Paper', 'Light', 'Dark', 'Darkest'],
     5: ['Paper', 'Light', 'Mid', 'Dark', 'Darkest'], 6: ['Paper', 'Light', 'Light mid', 'Dark mid', 'Dark', 'Darkest'],
     7: ['Paper', 'Pale', 'Light', 'Mid', 'Dark mid', 'Dark', 'Darkest'] };
 
-  var S = { mode: 'photo', view: 'layered', values: 5, simplify: 3, step: 1, opacity: 55, mirror: false, grid: false, color: 0 };
+  var S = { mode: 'photo', view: 'layered', values: 5, simplify: 3, hl: 0, step: 1, opacity: 55, mirror: false, grid: false, color: 0 };
   try { var sv = JSON.parse(localStorage.getItem('trace-camera') || 'null');
-    if (sv) ['mode', 'view', 'values', 'simplify', 'opacity', 'mirror', 'grid', 'color'].forEach(function (k) { if (k in sv) S[k] = sv[k]; }); } catch (e) {}
+    if (sv) ['mode', 'view', 'values', 'simplify', 'hl', 'opacity', 'mirror', 'grid', 'color'].forEach(function (k) { if (k in sv) S[k] = sv[k]; }); } catch (e) {}
   if (S.mode !== 'photo' && S.mode !== 'lines' && S.mode !== 'values') S.mode = 'values';  // older saved modes
   function persist() { try { localStorage.setItem('trace-camera', JSON.stringify(S)); } catch (e) {} }
 
@@ -406,34 +410,25 @@ button, select, input { font: inherit; color: inherit; }
   }
 
   // ---------- draw the overlay (transparent where nothing is drawn)
-  // What a pixel of value v shows for a given view and chosen value k.
-  //  stencil: only value k (1 = in the stencil);  layered: light to dark up to k;  all: every value
-  function shownOf(view, k, v) {
-    if (view === 'stencil') return v === k ? 1 : 0;
-    if (view === 'layered') return Math.min(v, Math.max(k, 1));
-    return v;
-  }
-  // Builds the overlay picture (transparent where nothing is drawn) at the photo's size.
+  // Grey for each value: lightest (1) near white, darkest near black.
+  function greyOf(v, n) { return Math.round(238 - (v - 1) / (n - 1) * 208); }
+  // Breakdown look: the whole picture in greys, with the current step filled in a bright colour.
+  //  layered: the area painted at step k (value k and everything darker; at k = 1 the paper shapes)
+  //  stencil: exactly value k;  all: greys only
   function buildImage(mode, view, k) {
     var w = img.w, h = img.h, n = S.values, out = octx.createImageData(w, h), o = out.data;
-    var col = COLORS[S.color][1], cur = S.color === 2 ? [40, 90, 255] : [235, 45, 45];
-    var sh = new Uint8Array(w * h);
-    for (var q = 0; q < sh.length; q++) sh[q] = mode === 'lines' ? idx[q] : shownOf(view, k, idx[q]);
-    var target = function (v) { return k === 1 ? v === 1 : v >= k; };   // the shape being added at value k
+    var hl = HL[S.hl][1], edgeCol = [Math.round(hl[0] * 0.55), Math.round(hl[1] * 0.55), Math.round(hl[2] * 0.55)];
+    var on = new Uint8Array(w * h);
+    if (view !== 'all') for (var q = 0; q < on.length; q++) { var v0 = idx[q];
+      on[q] = view === 'stencil' ? (v0 === k ? 1 : 0) : (k === 1 ? (v0 === 1 ? 1 : 0) : (v0 >= k ? 1 : 0)); }
     for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
-      var j = y * w + x, p = j * 4, s0 = sh[j], r = 0, g = 0, b = 0, a = 0;
-      if (mode === 'values') {
-        // stencil strength follows the value: 1 (paper) a faint tint, n (darkest) nearly solid
-        if (view === 'stencil' && s0) { r = col[0]; g = col[1]; b = col[2]; a = Math.round(255 * (0.12 + 0.78 * (k - 1) / (n - 1))); }
-        if (view !== 'stencil' && s0 > 1) { r = col[0]; g = col[1]; b = col[2]; a = Math.round(255 * 0.85 * (s0 - 1) / (n - 1)); }
+      var j = y * w + x, p = j * 4, gv = greyOf(idx[j], n), r = gv, g = gv, b = gv;
+      if (on[j]) {
+        r = hl[0]; g = hl[1]; b = hl[2];
+        var edge = (x < w - 1 && !on[j + 1]) || (y < h - 1 && !on[j + w]) || (x > 0 && !on[j - 1]) || (y > 0 && !on[j - w]);
+        if (edge) { r = edgeCol[0]; g = edgeCol[1]; b = edgeCol[2]; }   // a darker rim so the shape is easy to trace
       }
-      var edge = (x < w - 1 && sh[j + 1] !== s0) || (y < h - 1 && sh[j + w] !== s0) || (x > 0 && sh[j - 1] !== s0) || (y > 0 && sh[j - w] !== s0);
-      if (edge) { r = col[0]; g = col[1]; b = col[2]; a = 255; }
-      if (mode === 'values' && view === 'layered') {
-        var t = target(idx[j]);
-        if ((x < w - 1 && target(idx[j + 1]) !== t) || (y < h - 1 && target(idx[j + w]) !== t)) { r = cur[0]; g = cur[1]; b = cur[2]; a = 255; }
-      }
-      o[p] = r; o[p + 1] = g; o[p + 2] = b; o[p + 3] = a;
+      o[p] = r; o[p + 1] = g; o[p + 2] = b; o[p + 3] = 255;
     }
     return out;
   }
@@ -463,21 +458,16 @@ button, select, input { font: inherit; color: inherit; }
   // The breakdown strip: one small stencil per value, lightest first.
   function buildStrip() {
     if (!img || !idx) return;
-    var key = img.w + 'x' + img.h + ':' + S.values + ':' + S.simplify + ':' + S.color;
-    var strip = $('strip'), n = S.values, names = NAMES[n];
+    var strip = $('strip'), n = S.values, names = NAMES[n], key = String(n);
     if (strip.dataset.key === key && strip.children.length === n) return;
     strip.innerHTML = ''; strip.dataset.key = key;
-    var tmp = document.createElement('canvas'); tmp.width = img.w; tmp.height = img.h;
-    var tctx = tmp.getContext('2d');
-    var TH = 72, TW = Math.round(TH * img.w / img.h);
     for (var v = 1; v <= n; v++) {
-      tctx.putImageData(buildImage('values', 'stencil', v), 0, 0);
-      var b = document.createElement('button'); b.type = 'button'; b.className = 'vbtn'; b.dataset.v = v;
+      var gv = greyOf(v, n), b = document.createElement('button'); b.type = 'button'; b.className = 'vbtn'; b.dataset.v = v;
       b.setAttribute('aria-label', 'Value ' + v + ', ' + names[v - 1]);
-      var c = document.createElement('canvas'); c.width = TW * 2; c.height = TH * 2;
-      var cx = c.getContext('2d'); cx.fillStyle = '#f4f1ea'; cx.fillRect(0, 0, c.width, c.height); cx.drawImage(tmp, 0, 0, c.width, c.height);
-      var lab = document.createElement('span'); lab.innerHTML = '<b>' + v + '</b> ' + names[v - 1];
-      b.appendChild(c); b.appendChild(lab);
+      var sw = document.createElement('i'); sw.textContent = v;
+      sw.style.background = 'rgb(' + gv + ',' + gv + ',' + gv + ')'; sw.style.color = gv > 140 ? '#1b1f28' : '#f2f3f6';
+      var lab = document.createElement('span'); lab.textContent = names[v - 1];
+      b.appendChild(sw); b.appendChild(lab);
       b.addEventListener('click', function () { S.step = +this.dataset.v; persist(); render(); syncUI(); });
       strip.appendChild(b);
     }
@@ -550,9 +540,10 @@ button, select, input { font: inherit; color: inherit; }
     $('mirror').setAttribute('aria-pressed', S.mirror ? 'true' : 'false');
     $('grid').setAttribute('aria-pressed', S.grid ? 'true' : 'false');
     $('color').textContent = 'Lines: ' + COLORS[S.color][0];
+    $('hl').textContent = 'Colour: ' + HL[S.hl][0]; $('hl').hidden = S.view === 'all';
     var n = S.values, k = Math.min(Math.max(S.step, 1), n), name = NAMES[n][k - 1];
     $('stepLabel').textContent = S.view === 'all' ? 'All ' + n + ' values'
-      : S.view === 'layered' ? (k === 1 ? 'Value 1 · paper to keep white' : 'Values 1–' + k + ' · adding ' + name)
+      : S.view === 'layered' ? (k === 1 ? 'Step 1 · paper to keep white' : 'Step ' + k + ' · paint ' + name.toLowerCase() + (k < n ? ' and darker' : ''))
       : 'Value ' + k + ' of ' + n + ' · ' + name;
     if (S.mode === 'values') buildStrip();
     $('strip').querySelectorAll('.vbtn').forEach(function (b) {
@@ -569,7 +560,8 @@ button, select, input { font: inherit; color: inherit; }
   $('opacity').addEventListener('input', function () { S.opacity = +this.value; persist(); place(); });
   $('mirror').addEventListener('click', function () { S.mirror = !S.mirror; persist(); place(); syncUI(); });
   $('grid').addEventListener('click', function () { S.grid = !S.grid; persist(); render(); syncUI(); });
-  $('color').addEventListener('click', function () { S.color = (S.color + 1) % COLORS.length; persist(); $('strip').dataset.key = ''; render(); syncUI(); });
+  $('color').addEventListener('click', function () { S.color = (S.color + 1) % COLORS.length; persist(); render(); syncUI(); });
+  $('hl').addEventListener('click', function () { S.hl = (S.hl + 1) % HL.length; persist(); render(); syncUI(); });
   $('fit').addEventListener('click', function () { if (locked) { toast('Unlock first to move the picture'); return; } fit(); });
   $('lock').addEventListener('click', function () {
     locked = !locked; this.setAttribute('aria-pressed', locked ? 'true' : 'false'); this.textContent = locked ? 'Locked' : 'Lock';
