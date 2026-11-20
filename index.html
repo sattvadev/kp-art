@@ -119,9 +119,10 @@ button, select, input { font: inherit; color: inherit; }
   </div>
   <div class="row" id="styleRow" hidden>
     <div class="seg" id="styleSeg" role="group" aria-label="Line style">
-      <button type="button" data-v="strokes" aria-pressed="true">Strokes</button>
-      <button type="button" data-v="ai" aria-pressed="false">AI sketch</button>
+      <button type="button" data-v="ai" aria-pressed="true">AI sketch</button>
+      <button type="button" data-v="strokes" aria-pressed="false">Simple strokes</button>
     </div>
+    <span id="styleNote" style="font-size:.8rem;color:var(--muted)">Full drawing</span>
   </div>
   <div class="row" id="simplifyRow" hidden>
     <div class="slider"><label for="simplify">Simplify</label><input id="simplify" type="range" min="0" max="10" step="1" value="3"><output id="simplifyOut">3</output></div>
@@ -171,9 +172,12 @@ button, select, input { font: inherit; color: inherit; }
     5: ['Paper', 'Light', 'Mid', 'Dark', 'Darkest'], 6: ['Paper', 'Light', 'Light mid', 'Dark mid', 'Dark', 'Darkest'],
     7: ['Paper', 'Pale', 'Light', 'Mid', 'Dark mid', 'Dark', 'Darkest'] };
 
-  var S = { mode: 'photo', view: 'layered', values: 5, simplify: 3, hl: 0, lineStyle: 'strokes', step: 1, opacity: 55, mirror: false, grid: false, color: 0 };
+  var S = { mode: 'photo', view: 'layered', values: 5, simplify: 3, hl: 0, lineStyle: 'ai', step: 1, opacity: 55, mirror: false, grid: false, color: 0 };
   try { var sv = JSON.parse(localStorage.getItem('trace-camera') || 'null');
-    if (sv) ['mode', 'view', 'values', 'simplify', 'hl', 'lineStyle', 'opacity', 'mirror', 'grid', 'color'].forEach(function (k) { if (k in sv) S[k] = sv[k]; }); } catch (e) {}
+    if (sv) ['mode', 'view', 'values', 'simplify', 'hl', 'lineStyle', 'opacity', 'mirror', 'grid', 'color'].forEach(function (k) { if (k in sv) S[k] = sv[k]; });
+    if (sv && !sv.v2) S.lineStyle = 'ai';   // one-time switch: AI sketch became the default outline style
+  } catch (e) {}
+  S.v2 = 1;
   if (S.mode !== 'photo' && S.mode !== 'lines' && S.mode !== 'values') S.mode = 'values';  // older saved modes
   function persist() { try { localStorage.setItem('trace-camera', JSON.stringify(S)); } catch (e) {} }
 
@@ -346,8 +350,12 @@ button, select, input { font: inherit; color: inherit; }
   // strong edges and tapering on weak ones. Returns ink 0..1 per pixel (soft, anti-aliased).
   function computeSketch(lum, w, h, simplify) {
     var N = w * h, sp = Math.max(0, Math.min(10, simplify)), scale = Math.max(w, h) / 1000, x, y, i;
+    // 0. stretch the brightness range (1st to 99th percentile), so soft, low-contrast photos draw like crisp ones
+    var smp = []; for (i = 0; i < N; i += 7) smp.push(lum[i]); smp.sort(function (a, b) { return a - b; });
+    var pLo = smp[Math.floor(smp.length * 0.01)], pHi = smp[Math.floor(smp.length * 0.99)], rng = Math.max(0.05, pHi - pLo);
+    var L0 = new Float32Array(N); for (i = 0; i < N; i++) L0[i] = Math.min(1, Math.max(0, (lum[i] - pLo) / rng));
     // 1. light pre-blur, gradient, initial tangents (perpendicular to the gradient)
-    var I = boxMean(boxMean(lum, w, h, 1), w, h, 1);
+    var I = boxMean(boxMean(L0, w, h, 1), w, h, 1);
     var tx = new Float32Array(N), ty = new Float32Array(N), gm = new Float32Array(N), gmax = 1e-6;
     for (y = 1; y < h - 1; y++) for (x = 1; x < w - 1; x++) { i = y * w + x;
       var gx = (I[i - w + 1] + 2 * I[i + 1] + I[i + w + 1]) - (I[i - w - 1] + 2 * I[i - 1] + I[i + w - 1]);
@@ -403,11 +411,11 @@ button, select, input { font: inherit; color: inherit; }
     // 5. soft threshold, normalised to this photo so it works for light and dark images alike
     var neg = []; for (i = 0; i < N; i += 3) if (Hh[i] < 0) neg.push(-Hh[i]);
     neg.sort(function (a, b) { return a - b; });
-    var ref = neg.length ? neg[Math.floor(neg.length * 0.97)] : 1, lo = 0.07 + sp * 0.03, hi = lo + 0.3;
+    var ref = neg.length ? neg[Math.floor(neg.length * 0.95)] : 1, lo = 0.03 + sp * 0.035, hi = lo + 0.3;
     var ink = new Float32Array(N);
     for (i = 0; i < N; i++) { var d0 = -Hh[i] / ref; if (d0 > lo) { var u = Math.min(1, (d0 - lo) / (hi - lo)); ink[i] = u * u * (3 - 2 * u); } }
     // 6. drop short scraps so what is left is worth drawing
-    var minLen = Math.round((25 + sp * 12) * scale * scale), seen = new Uint8Array(N), stack = new Int32Array(N), comp = new Int32Array(N);
+    var minLen = Math.round((8 + sp * 14) * scale * scale), seen = new Uint8Array(N), stack = new Int32Array(N), comp = new Int32Array(N);
     for (var s0 = 0; s0 < N; s0++) {
       if (ink[s0] < 0.35 || seen[s0]) continue;
       var top = 0, size = 0; stack[top++] = s0; seen[s0] = 1;
@@ -587,7 +595,7 @@ button, select, input { font: inherit; color: inherit; }
     var d = cx.getImageData(0, 0, W, H).data, x = new Float32Array(3 * plane);
     for (var i = 0; i < plane; i++) { x[i] = d[i * 4] / 255; x[plane + i] = d[i * 4 + 1] / 255; x[2 * plane + i] = d[i * 4 + 2] / 255; }
     return sess.run({ input: new ort.Tensor('float32', x, [1, 3, H, W]) }).then(function (res) {
-      var y = res.output.data, lo = 0.08 + sp * 0.045, hi = lo + 0.45, a8 = new Uint8ClampedArray(plane * 4);
+      var y = res.output.data, lo = 0.03 + sp * 0.04, hi = lo + 0.5, a8 = new Uint8ClampedArray(plane * 4);
       for (var k = 0; k < plane; k++) {   // darker = more ink; faint construction lines drop out as Simplify rises
         var v = 1 - y[k], u = v <= lo ? 0 : v >= hi ? 1 : (v - lo) / (hi - lo);
         a8[k * 4 + 3] = Math.round(255 * u * u * (3 - 2 * u)); }
@@ -691,6 +699,7 @@ button, select, input { font: inherit; color: inherit; }
     $('valueRow').hidden = S.mode !== 'values';
     $('simplifyRow').hidden = S.mode === 'photo';
     $('styleRow').hidden = S.mode !== 'lines';
+    $('styleNote').textContent = S.lineStyle === 'ai' ? 'Full drawing, like a sketch' : 'Main lines only, instant';
     $('styleSeg').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.v === S.lineStyle ? 'true' : 'false'); });
     $('values').value = S.values; $('valuesOut').textContent = S.values; $('opacity').value = S.opacity;
     $('simplify').value = S.simplify; $('simplifyOut').textContent = S.simplify;
