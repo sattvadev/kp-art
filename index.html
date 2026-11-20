@@ -42,8 +42,9 @@ button, select, input { font: inherit; color: inherit; }
   padding: calc(8px + env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left)); pointer-events: none; }
 #top > * { pointer-events: auto; }
 #topLeft { display: flex; align-items: center; gap: 2px; padding: 4px 6px; }
-#backBtn { font-weight: 600; font-size: 1.05rem; gap: 4px; display: flex; align-items: center; padding: 8px 10px; }
-#toolsBtn { border: 0; padding: 12px 20px; font-weight: 700; font-size: 1.05rem; color: var(--accent); cursor: pointer; }
+#topRight { display: flex; align-items: center; gap: 8px; }
+#helpBtn { width: 46px; height: 46px; border: 0; font-weight: 700; font-size: 1.15rem; color: var(--ink); cursor: pointer; }
+#toolsBtn { border: 0; min-width: 92px; padding: 12px 20px; font-weight: 700; font-size: 1.05rem; color: var(--accent); cursor: pointer; }
 #toolsBtn[aria-expanded="true"] { background: var(--accent); color: var(--accent-ink); }
 
 /* Tools sheet */
@@ -53,7 +54,13 @@ button, select, input { font: inherit; color: inherit; }
 #tabs::-webkit-scrollbar { display: none; }
 #tabs button { flex: none; border: 0; padding: 10px 18px; border-radius: 999px; cursor: pointer; font-weight: 600; }
 #tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
-.card { border-radius: 22px; padding: 14px 16px; max-height: min(52vh, 460px); overflow-y: auto; display: grid; gap: 12px; touch-action: pan-y; }
+.card { border-radius: 22px; padding: 14px 16px; max-height: min(40vh, 360px); overflow-y: auto; display: grid; gap: 12px; touch-action: pan-y; }
+details.more { border-top: 1px solid var(--line); padding-top: 8px; }
+details.more summary { cursor: pointer; font-weight: 600; color: var(--accent); list-style: none; padding: 4px 0; }
+details.more summary::-webkit-details-marker { display: none; }
+details.more summary::after { content: " ▾"; }
+details.more[open] summary::after { content: " ▴"; }
+details.more > div { display: grid; gap: 12px; padding-top: 8px; }
 .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .ctl { display: grid; justify-items: center; gap: 6px; min-width: 64px; }
 .ctl > span { font-size: .9rem; color: var(--ink); }
@@ -74,13 +81,16 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 .chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .note { font-size: .82rem; color: var(--muted); }
 .swatchDot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line); display: inline-block; }
-.strip { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(48px, 1fr); gap: 6px; overflow-x: auto; scrollbar-width: none; }
-.strip::-webkit-scrollbar { display: none; }
-.vbtn { display: grid; gap: 3px; justify-items: center; padding: 4px; border-radius: 12px; border: 2px solid transparent; background: rgba(255,255,255,0.6); cursor: pointer; min-width: 0; }
-.vbtn i { display: grid; place-items: center; width: 100%; aspect-ratio: 1 / 1; max-height: 44px; border-radius: 8px; font-style: normal; font-weight: 700; border: 1px solid var(--line); }
-.vbtn span { font-size: .7rem; color: var(--muted); white-space: nowrap; }
-.vbtn[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
-.vbtn[aria-pressed="true"] span { color: var(--ink); font-weight: 600; }
+/* step bar: the breakdown steps, always on the drawing screen */
+#stepBar { width: min(520px, 100%); border-radius: 20px; padding: 7px 8px 8px; display: grid; gap: 5px; }
+#stepLabel { font-size: .84rem; font-weight: 600; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#strip { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
+.sbtn { height: 44px; min-width: 0; border-radius: 12px; border: 0; padding: 0; cursor: pointer; font-weight: 700; font-size: 1.05rem;
+  box-shadow: inset 0 0 0 1px rgba(20,24,32,.18); display: grid; place-items: center; }
+.sbtn[aria-pressed="true"] { box-shadow: inset 0 0 0 3px var(--accent), inset 0 0 0 5px #fff; }
+.sbtn.all { background: #fff; color: var(--ink); font-size: .9rem; }
+.colChip { display: inline-flex; align-items: center; gap: 8px; }
+.colChip .swatchDot { width: 18px; height: 18px; }
 
 /* bottom bar */
 #bottom { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; display: grid; justify-items: center; gap: 10px;
@@ -90,16 +100,29 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 #targets button { border: 0; background: transparent; display: grid; justify-items: center; gap: 2px; padding: 4px 12px; cursor: pointer; color: var(--ink); font-size: .74rem; border-radius: 14px; }
 #targets button svg { width: 28px; height: 28px; }
 #targets button[aria-pressed="true"] { color: var(--accent); font-weight: 600; }
-#actions { display: flex; gap: 14px; justify-content: center; }
-#actions button { border: 0; min-width: 104px; padding: 15px 22px; border-radius: 999px; font-weight: 700; font-size: 1.15rem; cursor: pointer; }
+#bottom > * { max-width: 100%; }
+#actions { display: flex; gap: clamp(8px, 3vw, 14px); justify-content: center; width: min(400px, 100%); }
+#actions button { flex: 1 1 0; min-width: 0; border: 0; padding: 15px 8px; border-radius: 999px; font-weight: 700; font-size: 1.15rem; cursor: pointer; }
 #actions button[aria-pressed="true"] { color: var(--accent); }
 #opacityPop { width: min(420px, 92vw); border-radius: 18px; padding: 10px 16px; display: grid; gap: 4px; }
 #opacityPop span { font-size: .85rem; text-align: center; color: var(--muted); }
 
 #toast { position: fixed; z-index: 30; left: 50%; top: calc(70px + env(safe-area-inset-top)); transform: translateX(-50%);
   border-radius: 14px; padding: 9px 14px; font-size: .92rem; max-width: 84vw; text-align: center; background: var(--glass-strong); box-shadow: 0 2px 12px rgba(0,0,0,.25); }
-#zoomTag { position: fixed; z-index: 18; right: max(14px, env(safe-area-inset-right)); top: calc(70px + env(safe-area-inset-top));
-  border-radius: 999px; padding: 5px 10px; font-size: .8rem; font-weight: 600; }
+#lockTag { position: fixed; z-index: 18; right: max(14px, env(safe-area-inset-right)); top: calc(70px + env(safe-area-inset-top));
+  border: 0; border-radius: 999px; padding: 7px 12px; font-size: .85rem; font-weight: 600; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+#lockTag svg { width: 16px; height: 16px; }
+
+/* dialogs: leave confirmation and help */
+.modal { position: fixed; inset: 0; z-index: 35; display: grid; place-items: center; background: rgba(0,0,0,.45);
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); }
+.modal .box { width: min(420px, 100%); max-height: 100%; overflow-y: auto; border-radius: 22px; padding: 20px; display: grid; gap: 12px; background: var(--glass-strong); touch-action: pan-y; }
+.modal h2 { margin: 0; font-size: 1.2rem; }
+.modal p, .modal li { margin: 0; color: #3c424e; }
+.modal ul { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
+.modal .btns { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.modal .btns button { border: 0; border-radius: 999px; padding: 11px 18px; font-weight: 700; cursor: pointer; background: rgba(20,24,32,.08); }
+.modal .btns button.primary { background: var(--accent); color: var(--accent-ink); }
 
 /* start screen */
 #start { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: var(--dark); color: #f2f3f6;
@@ -129,77 +152,61 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 
 <header id="top" hidden>
   <div id="topLeft" class="glass pill">
-    <button type="button" class="ibtn" id="backBtn" aria-label="Back to start">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>Back</button>
+    <button type="button" class="ibtn" id="homeBtn" aria-label="Leave and pick another photo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 11L12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5.5h4V20"/></svg></button>
     <button type="button" class="ibtn" id="undoBtn" aria-label="Undo picture move" disabled>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M9.5 8.5L7 11l2.5 2.5"/><path d="M7 11h6.5a3 3 0 010 6H11"/></svg></button>
     <button type="button" class="ibtn" id="redoBtn" aria-label="Redo picture move" disabled>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M14.5 8.5L17 11l-2.5 2.5"/><path d="M17 11h-6.5a3 3 0 000 6H13"/></svg></button>
   </div>
-  <button type="button" id="toolsBtn" class="glass pill" aria-expanded="false" aria-controls="tools">Tools</button>
+  <div id="topRight">
+    <button type="button" id="helpBtn" class="glass pill" aria-label="Help">?</button>
+    <button type="button" id="toolsBtn" class="glass pill" aria-expanded="false" aria-controls="tools">Tools</button>
+  </div>
 </header>
 
 <section id="tools" hidden aria-label="Tools">
   <div id="tabs" role="tablist">
-    <button type="button" role="tab" class="glass" data-tab="picture" aria-selected="true">Picture</button>
-    <button type="button" role="tab" class="glass" data-tab="strobe" aria-selected="false">Strobe</button>
+    <button type="button" role="tab" class="glass" data-tab="picture" aria-selected="true">View</button>
     <button type="button" role="tab" class="glass" data-tab="grid" aria-selected="false">Grid</button>
+    <button type="button" role="tab" class="glass" data-tab="strobe" aria-selected="false">Strobe</button>
     <button type="button" role="tab" class="glass" data-tab="camera" aria-selected="false">Camera</button>
-    <button type="button" role="tab" class="glass" data-tab="light" aria-selected="false">Flashlight</button>
+    <button type="button" role="tab" class="glass" data-tab="light" aria-selected="false">Light</button>
   </div>
 
   <div class="card glass" data-panel="picture">
-    <div class="row">
-      <div class="seg" id="modeSeg" role="group" aria-label="What to trace">
-        <button type="button" data-v="photo" aria-pressed="true">Photo</button>
-        <button type="button" data-v="lines" aria-pressed="false">Outlines</button>
-        <button type="button" data-v="values" aria-pressed="false">Values</button>
-      </div>
-      <button type="button" class="chip" id="fit">Fit to screen</button>
+    <div class="seg" id="modeSeg" role="group" aria-label="What to trace" style="justify-self:start">
+      <button type="button" data-v="photo" aria-pressed="true">Photo</button>
+      <button type="button" data-v="lines" aria-pressed="false">Outlines</button>
+      <button type="button" data-v="values" aria-pressed="false">Values</button>
     </div>
-    <div class="row" id="styleRow" hidden>
-      <div class="seg" id="styleSeg" role="group" aria-label="Line style">
-        <button type="button" data-v="ai" aria-pressed="true">AI sketch</button>
-        <button type="button" data-v="strokes" aria-pressed="false">Simple strokes</button>
-      </div>
-      <span id="styleNote" class="note">Full drawing</span>
-    </div>
-    <div id="aiRow" hidden style="display:grid;gap:8px">
-      <div class="row">
-        <div class="seg" id="aiViewSeg" role="group" aria-label="How to show the sketch">
-          <button type="button" data-v="layered" aria-pressed="true">Layered</button>
-          <button type="button" data-v="one" aria-pressed="false">One layer</button>
-          <button type="button" data-v="all" aria-pressed="false">All</button>
-        </div>
-      </div>
-      <div id="aiLabel" aria-live="polite" style="font-weight:600;font-size:.92rem">Layer 1 · Main lines</div>
-      <div class="strip" id="aiStrip" role="group" aria-label="Sketch layers, main lines first">
-        <button type="button" class="vbtn" data-l="1"><i style="background:#2b2d33;color:#fff">1</i><span>Main lines</span></button>
-        <button type="button" class="vbtn" data-l="2"><i style="background:#7c818c;color:#fff">2</i><span>Secondary</span></button>
-        <button type="button" class="vbtn" data-l="3"><i style="background:#d3d6dc;color:#15171c">3</i><span>Light &amp; texture</span></button>
-      </div>
-    </div>
-    <div id="valueRow" hidden style="display:grid;gap:8px">
-      <div class="row">
-        <div class="seg" id="viewSeg" role="group" aria-label="How to show the value">
-          <button type="button" data-v="layered" aria-pressed="true">Layered</button>
-          <button type="button" data-v="stencil" aria-pressed="false">Stencil</button>
-          <button type="button" data-v="all" aria-pressed="false">All</button>
-        </div>
-        <button type="button" class="chip" id="hl">Colour: coral</button>
-      </div>
-      <div id="stepLabel" aria-live="polite" style="font-weight:600;font-size:.92rem">Value 1</div>
-      <div class="strip" id="strip" role="group" aria-label="Values, lightest to darkest"></div>
-      <div class="grow"><input id="values" type="range" min="3" max="7" step="1" value="5" aria-label="Number of values"><span>Values: <output id="valuesOut">5</output></span></div>
-    </div>
+    <div class="grow" id="valuesRow" hidden><input id="values" type="range" min="3" max="7" step="1" value="5" aria-label="Number of values"><span>Values: <output id="valuesOut">5</output></span></div>
     <div class="grow" id="simplifyRow" hidden><input id="simplify" type="range" min="0" max="10" step="1" value="3" aria-label="Simplify"><span>Simplify: <output id="simplifyOut">3</output> <span class="note">(0 = most detail)</span></span></div>
-    <div class="row" id="lineColorRow">
-      <span class="note">Line colour</span>
-      <div class="step2"><button type="button" id="colPrev" aria-label="Previous line colour">−</button><button type="button" id="colNext" aria-label="Next line colour">+</button></div>
-      <i class="swatchDot" id="colDot"></i>
-      <button type="button" class="chip" id="mirror" aria-pressed="false">Mirror</button>
-      <button type="button" class="chip" id="newPhoto">New photo</button>
+    <div class="row" id="colourRow" hidden>
+      <button type="button" class="chip colChip" id="lineCol"><i class="swatchDot" id="colDot"></i><span>Lines: black</span></button>
+      <button type="button" class="chip colChip" id="hl"><i class="swatchDot" id="hlDot"></i><span>Step: coral</span></button>
     </div>
+    <details class="more" id="more">
+      <summary>More options</summary>
+      <div>
+        <div class="row" id="styleRow" hidden>
+          <div class="seg" id="styleSeg" role="group" aria-label="Line style">
+            <button type="button" data-v="ai" aria-pressed="true">AI sketch</button>
+            <button type="button" data-v="strokes" aria-pressed="false">Simple strokes</button>
+          </div>
+          <span id="styleNote" class="note">Full drawing</span>
+        </div>
+        <div class="row" id="cumRow" hidden>
+          <div class="ctl"><button type="button" class="switch" id="cumSw" role="switch" aria-checked="true" aria-label="Show earlier steps"></button></div>
+          <span style="flex:1 1 160px">Show earlier steps<br><span class="note" id="cumNote">Off shows only the step you picked.</span></span>
+        </div>
+        <div class="row">
+          <button type="button" class="chip" id="fit">Fit to screen</button>
+          <button type="button" class="chip" id="mirror" aria-pressed="false">Mirror</button>
+          <button type="button" class="chip" id="newPhoto">New photo</button>
+        </div>
+      </div>
+    </details>
   </div>
 
   <div class="card glass" data-panel="strobe" hidden>
@@ -213,11 +220,11 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
   <div class="card glass" data-panel="grid" hidden>
     <div class="row">
       <div class="ctl"><button type="button" class="switch" id="gridSw" role="switch" aria-checked="false" aria-label="Show grid"></button><span>Show Grid</span></div>
-      <div class="ctl"><div class="step2"><button type="button" id="gridColPrev" aria-label="Previous grid colour">−</button><button type="button" id="gridColNext" aria-label="Next grid colour">+</button></div><span>Colour <i class="swatchDot" id="gridDot" style="width:14px;height:14px;vertical-align:-2px"></i></span></div>
+      <button type="button" class="chip colChip" id="gridCol"><i class="swatchDot" id="gridDot"></i><span>Colour</span></button>
       <div class="grow"><input id="gridOpacity" type="range" min="10" max="100" step="1" value="80" aria-label="Grid opacity"><span>Grid Opacity</span></div>
     </div>
     <div class="grow"><input id="gridSize" type="range" min="30" max="200" step="5" value="90" aria-label="Grid cell size"><span>Cell size</span></div>
-    <div class="note">Choose <b>Grid</b> at the bottom, then turn on Move, to drag the grid into place.</div>
+    <div class="note">To drag the grid, turn on <b>Move</b> and choose <b>Grid</b> at the bottom.</div>
   </div>
 
   <div class="card glass" data-panel="camera" hidden>
@@ -227,7 +234,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
       <div class="ctl"><button type="button" class="switch" id="pauseSw" role="switch" aria-checked="false" aria-label="Pause camera"></button><span>Pause</span></div>
       <div class="ctl"><button type="button" class="chip" id="resetZoom">Reset zoom</button><span class="note" id="zoomNote">Zoom 1.0×</span></div>
     </div>
-    <div class="note">Pause freezes the camera picture. To zoom in for detail, turn Move off (or choose <b>Camera</b> at the bottom) and pinch. Double-tap to zoom back out.</div>
+    <div class="note">Pause freezes the camera picture. To zoom in for detail, turn Move off and pinch. Double-tap to zoom back out.</div>
   </div>
 
   <div class="card glass" data-panel="light" hidden>
@@ -238,15 +245,18 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
   </div>
 </section>
 
-<div id="zoomTag" class="glass" hidden>2.0×</div>
+<button type="button" id="lockTag" class="glass" hidden></button>
 <div id="toast" hidden></div>
 
 <footer id="bottom" hidden>
   <div id="opacityPop" class="glass" hidden><input id="opacity" type="range" min="10" max="100" step="1" value="55" aria-label="Picture opacity"><span>Picture opacity</span></div>
-  <div id="targets" class="glass" role="group" aria-label="What your fingers move">
+  <div id="targets" class="glass" role="group" aria-label="What your fingers move" hidden>
     <button type="button" data-t="picture" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M3.5 17l5-5 4 4 3-3 5 5"/></svg>Picture</button>
-    <button type="button" data-t="camera" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 8h3.5l2-2.5h7L17.5 8H21v11H3z"/><circle cx="12" cy="13" r="3.6"/></svg>Camera</button>
     <button type="button" data-t="grid" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>Grid</button>
+  </div>
+  <div id="stepBar" class="glass" hidden>
+    <div id="stepLabel" aria-live="polite">Step 1</div>
+    <div id="strip" role="group" aria-label="Steps, lightest first"></div>
   </div>
   <div id="actions">
     <button type="button" class="glass" id="moveBtn" aria-pressed="true">Move</button>
@@ -254,6 +264,30 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
     <button type="button" class="glass" id="opacityBtn" aria-pressed="false" aria-controls="opacityPop">Opacity</button>
   </div>
 </footer>
+
+<div id="leave" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="leaveTitle">
+  <div class="box">
+    <h2 id="leaveTitle">Leave tracing?</h2>
+    <p>You'll go back to the start screen to pick another photo. Your settings are kept.</p>
+    <div class="btns"><button type="button" id="leaveNo">Keep tracing</button><button type="button" class="primary" id="leaveYes">Leave</button></div>
+  </div>
+</div>
+
+<div id="help" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+  <div class="box">
+    <h2 id="helpTitle">How to trace</h2>
+    <ul>
+      <li><b>Set up:</b> prop the phone 25–40 cm above the paper, camera facing down.</li>
+      <li><b>Place the picture:</b> with <b>Move</b> on, drag, pinch and twist it onto the paper.</li>
+      <li><b>Lock it:</b> turn <b>Move</b> off. Now a pinch zooms in on details and the picture stays lined up. Double-tap to zoom out.</li>
+      <li><b>Steps:</b> in Values or AI outlines, tap a number at the bottom to jump to that step, lightest first. <b>All</b> shows everything.</li>
+      <li><b>Tools</b> has the view (photo, outlines, values), grid, strobe, camera and flashlight. Tap <b>Done</b> or the picture to close it.</li>
+      <li><b>Hide</b> and <b>Opacity</b> help you check your drawing against the paper.</li>
+    </ul>
+    <p class="note">Photos stay on your phone. AI sketch uses the Informative Drawings model by Caroline Chan, Frédo Durand and Phillip Isola (MIT License), run on your phone.</p>
+    <div class="btns"><button type="button" class="primary" id="helpClose">Got it</button></div>
+  </div>
+</div>
 
 <section id="start" aria-labelledby="startTitle">
   <div class="startcard">
@@ -264,7 +298,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
       <li>Choose a photo, then start the camera.</li>
       <li>With <b>Move</b> on, drag and pinch the picture to fit the paper. Then turn <b>Move</b> off to lock it.</li>
       <li>Pinch to zoom in on details: the picture stays lined up with your paper.</li>
-      <li><b>Tools</b> has outlines, values, strobe, grid, camera and flashlight.</li>
+      <li><b>Tools</b> has outlines, values, grid, strobe, camera and flashlight. Tap a number at the bottom to jump between value steps.</li>
     </ol>
     <div id="thumbWrap" hidden><img id="thumb" alt="Chosen photo"><span id="thumbName"></span></div>
     <label class="big" for="file">Choose a photo<input type="file" id="file" accept="image/*"></label>
@@ -288,12 +322,13 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
     7: ['Paper', 'Pale', 'Light', 'Mid', 'Dark mid', 'Dark', 'Darkest'] };
 
   var S = { mode: 'photo', view: 'layered', values: 5, simplify: 3, hl: 0, lineStyle: 'ai', step: 1, opacity: 55, mirror: false,
-            color: 0, grid: false, gridColor: 3, gridOpacity: 80, gridSize: 90, strobeSpeed: 4, aiView: 'layered', aiLayer: 1 };
-  var SAVED = ['mode', 'view', 'values', 'simplify', 'hl', 'lineStyle', 'opacity', 'mirror', 'color', 'grid', 'gridColor', 'gridOpacity', 'gridSize', 'strobeSpeed', 'aiView', 'aiLayer'];
+            color: 0, grid: false, gridColor: 3, gridOpacity: 80, gridSize: 90, strobeSpeed: 4, aiView: 'layered', aiLayer: 1, cumulative: true };
+  var SAVED = ['mode', 'view', 'values', 'simplify', 'hl', 'lineStyle', 'opacity', 'mirror', 'color', 'grid', 'gridColor', 'gridOpacity', 'gridSize', 'strobeSpeed', 'aiView', 'aiLayer', 'cumulative'];
   try { var sv = JSON.parse(localStorage.getItem('trace-camera') || 'null');
     if (sv) SAVED.forEach(function (k) { if (k in sv) S[k] = sv[k]; });
     if (sv && !sv.v2) S.lineStyle = 'ai';   // one-time switch: AI sketch became the default outline style
     if (typeof S.grid !== 'boolean') S.grid = false;
+    if (sv && !('cumulative' in sv)) S.cumulative = !(sv.view === 'stencil' || sv.aiView === 'one');   // older 'stencil'/'one layer' views
   } catch (e) {}
   S.v2 = 1;
   if (S.mode !== 'photo' && S.mode !== 'lines' && S.mode !== 'values') S.mode = 'values';  // older saved modes
@@ -359,6 +394,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
     }
     startCamera().then(function () {
       $('start').hidden = true; $('top').hidden = false; $('bottom').hidden = false;
+      if (!drawing) { drawing = true; history.pushState({ tc: 'draw' }, ''); }
       keepAwake(); setMove(true); fit(); drawGridLayer(); render(); syncUI();
     }).catch(function (e) {
       showErr(e && e.name === 'NotAllowedError'
@@ -777,22 +813,51 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
         render(); syncUI();
       });
   }
-  // The breakdown strip: one small stencil per value, lightest first.
-  function buildStrip() {
-    if (!img || !idx) return;
-    var strip = $('strip'), n = S.values, names = NAMES[n], key = String(n);
-    if (strip.dataset.key === key && strip.children.length === n) return;
+  // ---------- step bar: the breakdown steps on the drawing screen, lightest first, then All
+  var AI_NAMES = ['Main lines', 'Secondary lines', 'Light lines & texture'];
+  function stepKind() {
+    if (!img) return null;
+    if (S.mode === 'values' && idx) return 'values';
+    if (S.mode === 'lines' && S.lineStyle === 'ai' && aiMap) return 'ai';
+    return null;
+  }
+  function stepCount(kind) { return kind === 'ai' ? 3 : S.values; }
+  function curStep(kind) { return kind === 'ai' ? Math.min(3, Math.max(1, S.aiLayer)) : Math.min(Math.max(S.step, 1), S.values); }
+  function isAll(kind) { return kind === 'ai' ? S.aiView === 'all' : S.view === 'all'; }
+  function pickStep(kind, k) {   // k = 0 means All
+    if (kind === 'ai') { if (k) { S.aiLayer = k; S.aiView = S.cumulative ? 'layered' : 'one'; } else S.aiView = 'all'; }
+    else { if (k) { S.step = k; S.view = S.cumulative ? 'layered' : 'stencil'; } else S.view = 'all'; }
+    persist(); render(); syncUI();
+  }
+  function buildStrip(kind) {
+    var strip = $('strip'), n = stepCount(kind), key = kind + n;
+    if (strip.dataset.key === key && strip.children.length === n + 1) return;
     strip.innerHTML = ''; strip.dataset.key = key;
-    for (var v = 1; v <= n; v++) {
-      var gv = greyOf(v, n), b = document.createElement('button'); b.type = 'button'; b.className = 'vbtn'; b.dataset.v = v;
-      b.setAttribute('aria-label', 'Value ' + v + ', ' + names[v - 1]);
-      var sw = document.createElement('i'); sw.textContent = v;
-      sw.style.background = 'rgb(' + gv + ',' + gv + ',' + gv + ')'; sw.style.color = gv > 140 ? '#1b1f28' : '#f2f3f6';
-      var lab = document.createElement('span'); lab.textContent = names[v - 1];
-      b.appendChild(sw); b.appendChild(lab);
-      b.addEventListener('click', function () { S.step = +this.dataset.v; persist(); render(); syncUI(); });
+    for (var v = 0; v <= n; v++) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'sbtn'; b.dataset.v = v;
+      if (v === 0) { b.className += ' all'; b.textContent = 'All'; b.setAttribute('aria-label', 'Show all steps'); }
+      else {
+        var gv = kind === 'ai' ? [43, 124, 211][v - 1] : greyOf(v, n);
+        b.textContent = v; b.style.background = 'rgb(' + gv + ',' + gv + ',' + gv + ')'; b.style.color = gv > 140 ? '#1b1f28' : '#f2f3f6';
+        b.setAttribute('aria-label', 'Step ' + v + ', ' + (kind === 'ai' ? AI_NAMES[v - 1] : NAMES[n][v - 1]));
+      }
       strip.appendChild(b);
     }
+    // All goes last, after the darkest step
+    strip.appendChild(strip.firstChild);
+  }
+  $('strip').addEventListener('click', function (e) {
+    var b = e.target.closest('.sbtn'); var kind = stepKind(); if (!b || !kind) return;
+    pickStep(kind, +b.dataset.v);
+  });
+  function stepText(kind) {
+    var n = stepCount(kind), k = curStep(kind);
+    if (isAll(kind)) return kind === 'ai' ? 'Whole sketch' : 'All ' + n + ' values';
+    if (kind === 'ai') return S.cumulative ? (k === 1 ? 'Step 1 · ' + AI_NAMES[0].toLowerCase() : 'Step ' + k + ' · add ' + AI_NAMES[k - 1].toLowerCase())
+      : 'Step ' + k + ' only · ' + AI_NAMES[k - 1].toLowerCase();
+    var name = NAMES[n][k - 1].toLowerCase();
+    if (!S.cumulative) return 'Step ' + k + ' only · ' + name;
+    return k === 1 ? 'Step 1 · paper to keep white' : 'Step ' + k + ' · paint ' + name + (k < n ? ' and darker' : '');
   }
 
 
@@ -817,8 +882,8 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
   }
   function placeWorld() {
     $('world').style.transform = 'translate(' + V.x + 'px,' + V.y + 'px) scale(' + V.s + ')';
-    $('zoomTag').hidden = V.s < 1.05; $('zoomTag').textContent = V.s.toFixed(1) + '×';
     $('zoomNote').textContent = 'Zoom ' + V.s.toFixed(1) + '×';
+    syncLock();
   }
   function clampView() {
     var W = window.innerWidth, H = window.innerHeight;
@@ -892,6 +957,9 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
     var wasMoved = g && g.moved, kind = g && g.kind; g = null;
     if (kind === 'picture' && wasMoved && beforeT) pushUndo(beforeT);
     if (kind === 'grid' && wasMoved) { persist(); syncUI(); }
+    if (!wasMoved && (!$('tools').hidden || !$('opacityPop').hidden)) {   // a tap on the picture closes Tools and the slider
+      if (!$('tools').hidden) closeTools(); $('opacityPop').hidden = true; syncUI(); lastTap = 0; return;
+    }
     if (!wasMoved) {   // a tap: two quick taps reset the zoom
       var now = Date.now();
       if (now - lastTap < 320) { resetView(); lastTap = 0; } else lastTap = now;
@@ -927,50 +995,98 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
   // ---------- bottom bar
   function setMove(on) { move = on; syncUI(); }
   function setTarget(t) {
-    target = t;
-    if (t === 'camera' && move) move = false;   // zooming needs the picture locked
-    syncUI();
-    toast(t === 'camera' ? 'Picture locked. Pinch to magnify, drag to look around. Double-tap to zoom out.'
-      : t === 'grid' ? (move ? 'Drag to move the grid, pinch to change its size.' : 'Turn on Move to drag the grid.')
-      : (move ? 'Drag, pinch and twist to place the picture.' : 'Picture locked. Turn on Move to place it.'));
+    target = t; syncUI();
+    toast(t === 'grid' ? 'Drag to move the grid, pinch to change its size.' : 'Drag, pinch and twist to place the picture.');
   }
   $('targets').querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { setTarget(b.dataset.t); }); });
-  $('moveBtn').addEventListener('click', function () {
+  function toggleMove() {
     setMove(!move);
-    if (move && target === 'camera') { target = 'picture'; syncUI(); }
     toast(move ? (target === 'grid' ? 'Move on: drag the grid.' : 'Move on: drag, pinch and twist the picture.')
       : 'Locked. Pinch to zoom in on details; the picture stays on your paper.');
-  });
+  }
+  $('moveBtn').addEventListener('click', toggleMove);
+  $('lockTag').addEventListener('click', function () { if (!move) toggleMove(); else resetView(); });
+  function syncLock() {
+    var el = $('lockTag'), z = V.s >= 1.05, lockSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 018 0v3"/></svg>';
+    el.hidden = $('top').hidden || (move && !z);
+    el.innerHTML = (move ? '' : lockSvg + 'Locked') + (z ? (move ? '' : ' · ') + V.s.toFixed(1) + '×' : '');
+    el.setAttribute('aria-label', move ? 'Zoom ' + V.s.toFixed(1) + '×. Tap to zoom out' : 'Picture locked. Tap to unlock and move it');
+  }
   $('hideBtn').addEventListener('click', function () { hidden = !hidden; place(); syncUI(); });
   $('opacityBtn').addEventListener('click', function () { $('opacityPop').hidden = !$('opacityPop').hidden; syncUI(); });
   $('opacity').addEventListener('input', function () { S.opacity = +this.value; persist(); place(); });
 
-  // ---------- top bar and Tools
-  $('toolsBtn').addEventListener('click', function () { $('tools').hidden = !$('tools').hidden; syncUI(); });
+  // ---------- top bar, Tools, Help and the back gesture
+  // History: start  ->  draw  ->  (tools | help). Back closes the top layer first; back on the drawing asks before leaving.
+  var drawing = false, goingHome = false;
+  function layerOpen() { return !$('tools').hidden ? 'tools' : !$('help').hidden ? 'help' : null; }
+  function openLayer(name) {
+    if (layerOpen() === name) return;
+    var wasOpen = layerOpen();
+    $('tools').hidden = name !== 'tools'; $('help').hidden = name !== 'help';
+    if (wasOpen) history.replaceState({ tc: name }, ''); else history.pushState({ tc: name }, '');
+    syncUI();
+  }
+  function closeLayer() {
+    if (!layerOpen()) return;
+    $('tools').hidden = true; $('help').hidden = true; syncUI();
+    if (history.state && (history.state.tc === 'tools' || history.state.tc === 'help')) history.back();
+  }
+  function closeTools() { if (!$('tools').hidden) closeLayer(); }
+  $('toolsBtn').addEventListener('click', function () { if (!$('tools').hidden) closeLayer(); else openLayer('tools'); });
+  $('helpBtn').addEventListener('click', function () { openLayer('help'); });
+  $('helpClose').addEventListener('click', closeLayer);
+  $('help').addEventListener('click', function (e) { if (e.target === this) closeLayer(); });
   $('tabs').querySelectorAll('button').forEach(function (b) {
     b.addEventListener('click', function () {
       $('tabs').querySelectorAll('button').forEach(function (o) { o.setAttribute('aria-selected', o === b ? 'true' : 'false'); });
       document.querySelectorAll('[data-panel]').forEach(function (p) { p.hidden = p.dataset.panel !== b.dataset.tab; });
     });
   });
-  $('backBtn').addEventListener('click', function () {
-    $('start').hidden = false; $('top').hidden = true; $('bottom').hidden = true; $('tools').hidden = true;
+  function showStart() {
+    drawing = false; $('leave').hidden = true; $('tools').hidden = true; $('help').hidden = true;
+    $('start').hidden = false; $('top').hidden = true; $('bottom').hidden = true; $('opacityPop').hidden = true;
     if (strobeOn) setStrobe(false);
+    syncUI();
+  }
+  function goHome() {
+    var st = history.state && history.state.tc;
+    var depth = st === 'tools' || st === 'help' ? 2 : st === 'draw' ? 1 : 0;
+    if (!depth) { showStart(); return; }
+    goingHome = true; history.go(-depth);
+  }
+  $('homeBtn').addEventListener('click', function () { $('leave').hidden = false; $('leaveNo').focus(); });
+  $('leaveNo').addEventListener('click', function () { $('leave').hidden = true; });
+  $('leaveYes').addEventListener('click', goHome);
+  $('leave').addEventListener('click', function (e) { if (e.target === this) this.hidden = true; });
+  window.addEventListener('popstate', function (e) {
+    var st = e.state && e.state.tc;
+    if (goingHome) { goingHome = false; showStart(); return; }
+    if (st === 'draw') { $('tools').hidden = true; $('help').hidden = true; syncUI(); return; }   // back closed Tools or Help
+    if (drawing && !st) {   // back from the drawing itself: stay, and ask
+      history.pushState({ tc: 'draw' }, ''); $('leave').hidden = false; $('leaveNo').focus();
+    }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (!$('leave').hidden) $('leave').hidden = true; else if (layerOpen()) closeLayer(); else if (!$('opacityPop').hidden) { $('opacityPop').hidden = true; syncUI(); }
   });
   // picture tab
   function setMode(m) { S.mode = m; if (m === 'values') S.step = 1; persist(); render(); syncUI(); }  // values always start at the lightest
   $('modeSeg').querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { setMode(b.dataset.v); }); });
   $('styleSeg').querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { S.lineStyle = b.dataset.v; persist(); render(); syncUI(); }); });
-  $('viewSeg').querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { S.view = b.dataset.v; persist(); render(); syncUI(); }); });
   $('values').addEventListener('input', function () { $('valuesOut').textContent = this.value; });
   $('values').addEventListener('change', function () { S.values = +this.value; S.step = Math.min(S.step, S.values); idx = null; persist(); reprocess(function () { render(); syncUI(); }); });
   $('simplify').addEventListener('input', function () { $('simplifyOut').textContent = this.value; });
   $('simplify').addEventListener('change', function () { S.simplify = +this.value; idx = null; lineMap = null; aiMap = null; persist(); reprocess(function () { render(); syncUI(); }); });
-  $('aiViewSeg').querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { S.aiView = b.dataset.v; persist(); render(); syncUI(); }); });
-  $('aiStrip').querySelectorAll('.vbtn').forEach(function (b) { b.addEventListener('click', function () { S.aiLayer = +b.dataset.l; if (S.aiView === 'all') S.aiView = 'layered'; persist(); render(); syncUI(); }); });
+  $('cumSw').addEventListener('click', function () {
+    S.cumulative = !S.cumulative;
+    if (S.view !== 'all') S.view = S.cumulative ? 'layered' : 'stencil';
+    if (S.aiView !== 'all') S.aiView = S.cumulative ? 'layered' : 'one';
+    persist(); render(); syncUI();
+  });
   $('hl').addEventListener('click', function () { S.hl = (S.hl + 1) % HL.length; persist(); render(); syncUI(); });
-  $('colPrev').addEventListener('click', function () { S.color = (S.color + COLORS.length - 1) % COLORS.length; persist(); render(); syncUI(); });
-  $('colNext').addEventListener('click', function () { S.color = (S.color + 1) % COLORS.length; persist(); render(); syncUI(); });
+  $('lineCol').addEventListener('click', function () { S.color = (S.color + 1) % COLORS.length; persist(); render(); syncUI(); });
   $('mirror').addEventListener('click', function () { S.mirror = !S.mirror; persist(); place(); syncUI(); });
   $('newPhoto').addEventListener('click', function () { $('file').click(); });
   $('fit').addEventListener('click', function () { if (!img) return; pushUndo(snap()); fit(); });
@@ -979,8 +1095,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
   $('strobeSpeed').addEventListener('input', function () { S.strobeSpeed = +this.value; persist(); if (strobeOn) setStrobe(true); });
   // grid tab
   $('gridSw').addEventListener('click', function () { S.grid = !S.grid; persist(); drawGridLayer(); syncUI(); });
-  $('gridColPrev').addEventListener('click', function () { S.gridColor = (S.gridColor + COLORS.length - 1) % COLORS.length; persist(); drawGridLayer(); syncUI(); });
-  $('gridColNext').addEventListener('click', function () { S.gridColor = (S.gridColor + 1) % COLORS.length; persist(); drawGridLayer(); syncUI(); });
+  $('gridCol').addEventListener('click', function () { S.gridColor = (S.gridColor + 1) % COLORS.length; persist(); drawGridLayer(); syncUI(); });
   $('gridOpacity').addEventListener('input', function () { S.gridOpacity = +this.value; persist(); drawGridLayer(); });
   $('gridSize').addEventListener('input', function () { S.gridSize = +this.value; persist(); drawGridLayer(); });
   // camera tab
@@ -1003,41 +1118,49 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 
   function setSwitch(id, on) { $(id).setAttribute('aria-checked', on ? 'true' : 'false'); }
   function syncUI() {
+    if (S.view === 'stencil' && S.cumulative) S.view = 'layered'; if (S.view === 'layered' && !S.cumulative) S.view = 'stencil';
+    if (S.aiView === 'one' && S.cumulative) S.aiView = 'layered'; if (S.aiView === 'layered' && !S.cumulative) S.aiView = 'one';
+    var lines = S.mode === 'lines', vals = S.mode === 'values', ai = lines && S.lineStyle === 'ai';
+    // View panel
     $('modeSeg').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.v === S.mode ? 'true' : 'false'); });
-    $('viewSeg').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.v === S.view ? 'true' : 'false'); });
-    $('valueRow').hidden = S.mode !== 'values';
-    $('simplifyRow').hidden = S.mode === 'photo';
-    $('styleRow').hidden = S.mode !== 'lines';
-    $('aiRow').hidden = !(S.mode === 'lines' && S.lineStyle === 'ai');
-    $('aiViewSeg').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.v === S.aiView ? 'true' : 'false'); });
-    var LN = ['Main lines', 'Secondary lines', 'Light lines & texture'], al = Math.min(3, Math.max(1, S.aiLayer));
-    $('aiLabel').textContent = S.aiView === 'all' ? 'Whole sketch' : S.aiView === 'one' ? 'Layer ' + al + ' only · ' + LN[al - 1]
-      : (al === 1 ? 'Layer 1 · ' + LN[0] : 'Layers 1–' + al + ' · adding ' + LN[al - 1].toLowerCase());
-    $('aiStrip').querySelectorAll('.vbtn').forEach(function (b) { b.setAttribute('aria-pressed', S.aiView !== 'all' && +b.dataset.l === al ? 'true' : 'false'); });
-    $('styleNote').textContent = S.lineStyle === 'ai' ? 'Full drawing, like a sketch' : 'Main lines only, instant';
+    $('valuesRow').hidden = !vals; $('simplifyRow').hidden = S.mode === 'photo'; $('colourRow').hidden = S.mode === 'photo';
+    $('lineCol').hidden = !lines; $('hl').hidden = !(vals || ai);
+    $('styleRow').hidden = !lines; $('cumRow').hidden = !(vals || ai);
+    $('styleNote').textContent = S.lineStyle === 'ai' ? 'Full drawing, in 3 steps' : 'Main lines only, instant';
     $('styleSeg').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.v === S.lineStyle ? 'true' : 'false'); });
+    setSwitch('cumSw', S.cumulative);
+    $('cumNote').textContent = S.cumulative ? 'Each step shows the steps before it, the way you build up a drawing.' : 'Each step shows only its own shapes.';
     $('values').value = S.values; $('valuesOut').textContent = S.values; $('opacity').value = S.opacity;
     $('simplify').value = S.simplify; $('simplifyOut').textContent = S.simplify;
     $('mirror').setAttribute('aria-pressed', S.mirror ? 'true' : 'false');
     $('colDot').style.background = 'rgb(' + COLORS[S.color][1].join(',') + ')';
-    var lc = S.mode === 'lines'; $('lineColorRow').querySelector('.note').hidden = !lc; $('colPrev').parentNode.hidden = !lc; $('colDot').hidden = !lc;
-    $('hl').textContent = 'Colour: ' + HL[S.hl][0]; $('hl').hidden = S.view === 'all';
-    var n = S.values, k = Math.min(Math.max(S.step, 1), n), name = NAMES[n][k - 1];
-    $('stepLabel').textContent = S.view === 'all' ? 'All ' + n + ' values'
-      : S.view === 'layered' ? (k === 1 ? 'Step 1 · paper to keep white' : 'Step ' + k + ' · paint ' + name.toLowerCase() + (k < n ? ' and darker' : ''))
-      : 'Value ' + k + ' of ' + n + ' · ' + name;
-    if (S.mode === 'values') buildStrip();
-    $('strip').querySelectorAll('.vbtn').forEach(function (b) { b.setAttribute('aria-pressed', S.view !== 'all' && +b.dataset.v === k ? 'true' : 'false'); });
+    $('lineCol').querySelector('span').textContent = 'Lines: ' + COLORS[S.color][0];
+    $('hlDot').style.background = 'rgb(' + HL[S.hl][1].join(',') + ')';
+    $('hl').querySelector('span').textContent = 'Step colour: ' + HL[S.hl][0];
+    // step bar
+    var kind = $('start').hidden ? stepKind() : null;
+    $('stepBar').hidden = !kind;
+    if (kind) {
+      buildStrip(kind);
+      var k = curStep(kind), all = isAll(kind);
+      $('strip').querySelectorAll('.sbtn').forEach(function (b) { var v = +b.dataset.v; b.setAttribute('aria-pressed', (all ? v === 0 : v === k) ? 'true' : 'false'); });
+      $('stepLabel').textContent = stepText(kind);
+    }
     // bottom bar
+    if (!S.grid && target === 'grid') target = 'picture';
+    $('targets').hidden = !(move && S.grid);
     $('targets').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.t === target ? 'true' : 'false'); });
     $('moveBtn').setAttribute('aria-pressed', move ? 'true' : 'false');
     $('hideBtn').textContent = hidden ? 'Show' : 'Hide'; $('hideBtn').setAttribute('aria-pressed', hidden ? 'true' : 'false');
     $('opacityBtn').setAttribute('aria-pressed', $('opacityPop').hidden ? 'false' : 'true');
-    $('toolsBtn').setAttribute('aria-expanded', $('tools').hidden ? 'false' : 'true');
-    // tools
+    var tOpen = !$('tools').hidden;
+    $('toolsBtn').setAttribute('aria-expanded', tOpen ? 'true' : 'false'); $('toolsBtn').textContent = tOpen ? 'Done' : 'Tools';
+    syncLock();
+    // other tools
     setSwitch('strobeSw', strobeOn); $('strobeSpeed').value = S.strobeSpeed;
     setSwitch('gridSw', S.grid); $('gridOpacity').value = S.gridOpacity; $('gridSize').value = S.gridSize;
     $('gridDot').style.background = 'rgb(' + COLORS[S.gridColor][1].join(',') + ')';
+    $('gridCol').querySelector('span').textContent = 'Colour: ' + COLORS[S.gridColor][0];
     setSwitch('pauseSw', paused); setSwitch('torchSw', torchOn);
   }
   window.addEventListener('resize', function () { drawGridLayer(); clampView(); placeWorld(); if (img) place(); });

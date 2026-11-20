@@ -7,7 +7,7 @@ and your chosen photo floats see-through on top, so you can draw while watching 
   XDoG-style soft thresholding: long, continuous lines that follow the form, heavier on strong edges, tapering at the ends),
   or **Values**: a breakdown strip of every value from lightest (1, paper) to darkest,
   shown as a breakdown: the whole picture in greys with the current step filled in a bright colour (coral, blue, green
-  or yellow). Layered fills the area painted at that step (that value and darker), Stencil fills exactly that value, All shows the greys.
+  or yellow). With Show earlier steps on, a step fills the area painted at that step (that value and darker); off fills exactly that value; All shows the greys.
   Shapes have smooth, anti-aliased edges with a clean contour stroke. Numbered grey swatches pick the step, lightest (1) to darkest.
 - Values are found with an edge-preserving filter (keeps edges crisp, no halo rings), grouped by the photo's own tones,
   then cleaned of slivers and specks so each value is a solid stencil. A second 'details' pass from a lightly smoothed
@@ -17,13 +17,18 @@ and your chosen photo floats see-through on top, so you can draw while watching 
   and Phillip Isola (CVPR 2022, MIT License, https://github.com/carolineec/informative-drawings), run on the phone with
   onnxruntime-web: WebGPU where available, else WebAssembly. The 17 MB model downloads once and is kept on the device.
   See `models/README.md` and `models/LICENSE-informative-drawings`.
-- Controls: a top bar (Back, undo, redo, Tools), a Tools sheet with tabs (Picture, Strobe, Grid, Camera, Flashlight),
-  and a bottom bar choosing what your fingers move (Picture, Camera, Grid) plus Move, Hide and Opacity.
+- Drawing screen: a top bar (Home, undo, redo, Help, Tools) and, at the bottom, a **step strip** plus Move, Hide and Opacity.
+  The step strip shows in Values and AI outlines: tap any number (1 lightest first) to jump straight to that step, or All.
+  Picture / Grid choices appear only while Move is on and the grid is shown.
+- **Tools** opens a short panel under the top bar (View, Grid, Strobe, Camera, Light) with the drawing still visible.
+  The button turns into **Done**; tapping the picture or the phone's back gesture also closes it. Rarely used options
+  (line style, show earlier steps, fit, mirror, new photo) sit under More options.
+- **Home** asks before leaving the drawing. The browser back gesture closes Tools or Help first, and asks before leaving.
 - With **Move** on, drag, pinch and twist the picture (or drag the grid). Magnifying only works with the picture locked:
-  turn Move off (choosing Camera does this for you), then pinch to zoom the camera view with the picture on it, so the
-  picture stays on the paper. Double-tap to zoom back out. The browser's own page zoom is blocked.
+  turn Move off, then pinch to zoom the camera view with the picture on it, so the picture stays on the paper.
+  A Locked badge shows the zoom; tap it to unlock. Double-tap to zoom back out. The browser's own page zoom is blocked.
 - AI sketch comes in three layers, traced in passes: 1 main lines, 2 secondary lines, 3 light lines and texture
-  (strokes grouped by how firmly they are drawn). View them layered, one at a time, or all together.
+  (strokes grouped by how firmly they are drawn). Show earlier steps (on by default) builds the steps up; off shows one step alone.
 - Strobe blinks the picture to compare with your drawing; the grid covers the screen with adjustable colour, opacity and
   cell size; Camera can pause or switch cameras; Flashlight turns on the torch where the browser allows it.
 - Opacity, mirror and line colour; the screen is kept awake.
