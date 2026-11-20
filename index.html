@@ -17,7 +17,7 @@
   --dark: #0f1115; --danger: #c2412d;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { margin: 0; height: 100%; background: #000; color: var(--ink);
+html, body { margin: 0; height: 100%; background: #000; color: var(--ink); touch-action: none; overscroll-behavior: none; -webkit-text-size-adjust: 100%;
   font: 15px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
 button, select, input { font: inherit; color: inherit; }
 [hidden] { display: none !important; }
@@ -53,7 +53,7 @@ button, select, input { font: inherit; color: inherit; }
 #tabs::-webkit-scrollbar { display: none; }
 #tabs button { flex: none; border: 0; padding: 10px 18px; border-radius: 999px; cursor: pointer; font-weight: 600; }
 #tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
-.card { border-radius: 22px; padding: 14px 16px; max-height: min(52vh, 460px); overflow-y: auto; display: grid; gap: 12px; }
+.card { border-radius: 22px; padding: 14px 16px; max-height: min(52vh, 460px); overflow-y: auto; display: grid; gap: 12px; touch-action: pan-y; }
 .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .ctl { display: grid; justify-items: center; gap: 6px; min-width: 64px; }
 .ctl > span { font-size: .9rem; color: var(--ink); }
@@ -164,6 +164,21 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
       </div>
       <span id="styleNote" class="note">Full drawing</span>
     </div>
+    <div id="aiRow" hidden style="display:grid;gap:8px">
+      <div class="row">
+        <div class="seg" id="aiViewSeg" role="group" aria-label="How to show the sketch">
+          <button type="button" data-v="layered" aria-pressed="true">Layered</button>
+          <button type="button" data-v="one" aria-pressed="false">One layer</button>
+          <button type="button" data-v="all" aria-pressed="false">All</button>
+        </div>
+      </div>
+      <div id="aiLabel" aria-live="polite" style="font-weight:600;font-size:.92rem">Layer 1 · Main lines</div>
+      <div class="strip" id="aiStrip" role="group" aria-label="Sketch layers, main lines first">
+        <button type="button" class="vbtn" data-l="1"><i style="background:#2b2d33;color:#fff">1</i><span>Main lines</span></button>
+        <button type="button" class="vbtn" data-l="2"><i style="background:#7c818c;color:#fff">2</i><span>Secondary</span></button>
+        <button type="button" class="vbtn" data-l="3"><i style="background:#d3d6dc;color:#15171c">3</i><span>Light &amp; texture</span></button>
+      </div>
+    </div>
     <div id="valueRow" hidden style="display:grid;gap:8px">
       <div class="row">
         <div class="seg" id="viewSeg" role="group" aria-label="How to show the value">
@@ -273,8 +288,8 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
     7: ['Paper', 'Pale', 'Light', 'Mid', 'Dark mid', 'Dark', 'Darkest'] };
 
   var S = { mode: 'photo', view: 'layered', values: 5, simplify: 3, hl: 0, lineStyle: 'ai', step: 1, opacity: 55, mirror: false,
-            color: 0, grid: false, gridColor: 3, gridOpacity: 80, gridSize: 90, strobeSpeed: 4 };
-  var SAVED = ['mode', 'view', 'values', 'simplify', 'hl', 'lineStyle', 'opacity', 'mirror', 'color', 'grid', 'gridColor', 'gridOpacity', 'gridSize', 'strobeSpeed'];
+            color: 0, grid: false, gridColor: 3, gridOpacity: 80, gridSize: 90, strobeSpeed: 4, aiView: 'layered', aiLayer: 1 };
+  var SAVED = ['mode', 'view', 'values', 'simplify', 'hl', 'lineStyle', 'opacity', 'mirror', 'color', 'grid', 'gridColor', 'gridOpacity', 'gridSize', 'strobeSpeed', 'aiView', 'aiLayer'];
   try { var sv = JSON.parse(localStorage.getItem('trace-camera') || 'null');
     if (sv) SAVED.forEach(function (k) { if (k in sv) S[k] = sv[k]; });
     if (sv && !sv.v2) S.lineStyle = 'ai';   // one-time switch: AI sketch became the default outline style
@@ -628,7 +643,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
     if (S.mode === 'photo') { octx.drawImage(srcCanvas, 0, 0); place(); return; }
     if (S.mode === 'lines' && S.lineStyle === 'ai') {
       if (!aiMap) { runAI(); return; }   // loads the model on first use, then draws
-      octx.putImageData(inkImage(aiMap), 0, 0); place(); return;
+      octx.putImageData(aiImage(), 0, 0); place(); return;
     }
     if (S.mode === 'lines') {
       if (!lineMap) { reprocess(function () { render(); syncUI(); }); return; }   // worked out on first need
@@ -712,10 +727,44 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
       var c2 = document.createElement('canvas'); c2.width = W; c2.height = H; c2.getContext('2d').putImageData(new ImageData(a8, W, H), 0, 0);
       var c3 = document.createElement('canvas'); c3.width = img.w; c3.height = img.h; var x3 = c3.getContext('2d');
       x3.imageSmoothingQuality = 'high'; x3.drawImage(c2, 0, 0, img.w, img.h);
-      var a3 = x3.getImageData(0, 0, img.w, img.h).data, ink = new Float32Array(img.w * img.h);
-      for (var j = 0; j < ink.length; j++) ink[j] = a3[j * 4 + 3] / 255;
-      return ink;
+      var a3 = x3.getImageData(0, 0, img.w, img.h).data, N = img.w * img.h, ink = new Float32Array(N);
+      for (var j = 0; j < N; j++) ink[j] = a3[j * 4 + 3] / 255;
+      return splitLayers(ink);
     });
+  }
+  // Split the sketch into layers, the way you'd trace it in passes: firmest strokes first.
+  // Firmness is averaged along each stroke (over stroke pixels only) so a stroke stays in one layer,
+  // and the split is by this drawing's own thirds, so every photo gets three balanced layers.
+  function splitLayers(ink) {
+    var w = img.w, h = img.h, N = w * h, r = Math.max(3, Math.round(5 * Math.max(w, h) / 1000));
+    var m = new Float32Array(N), vm = new Float32Array(N);
+    for (var i = 0; i < N; i++) { var on = ink[i] > 0.08 ? 1 : 0; m[i] = on; vm[i] = ink[i] * on; }
+    var num = boxMean(boxMean(boxMean(vm, w, h, r), w, h, r), w, h, r), den = boxMean(boxMean(boxMean(m, w, h, r), w, h, r), w, h, r);
+    var firm = new Float32Array(N), vals = [];
+    for (var j = 0; j < N; j++) { firm[j] = den[j] > 1e-6 ? num[j] / den[j] : 0; if (m[j] && (j % 3 === 0)) vals.push(firm[j]); }
+    vals.sort(function (a, b) { return a - b; });
+    var t1 = vals.length ? vals[Math.floor(vals.length * 0.66)] : 1, t2 = vals.length ? vals[Math.floor(vals.length * 0.33)] : 0;
+    var l1 = new Float32Array(N), l2 = new Float32Array(N), l3 = new Float32Array(N);
+    for (var k = 0; k < N; k++) { var a = ink[k]; if (!a) continue;
+      if (firm[k] >= t1) l1[k] = a; else if (firm[k] >= t2) l2[k] = a; else l3[k] = a; }
+    return { ink: ink, layers: [l1, l2, l3] };
+  }
+  // The sketch overlay: earlier layers in the line colour, the current layer in the highlight colour.
+  function aiImage() {
+    var w = img.w, h = img.h, N = w * h, out = octx.createImageData(w, h), o = out.data;
+    var col = COLORS[S.color][1], hl = HL[S.hl][1], k = Math.min(3, Math.max(1, S.aiLayer)), L = aiMap.layers;
+    for (var j = 0; j < N; j++) {
+      var a = 0, c = col;
+      if (S.aiView === 'all') a = aiMap.ink[j];
+      else if (S.aiView === 'one') a = L[k - 1][j];
+      else {   // layered
+        var cur = L[k - 1][j], prev = 0; for (var q = 0; q < k - 1; q++) if (L[q][j] > prev) prev = L[q][j];
+        if (cur > 0.02) { a = cur; c = hl; } else a = prev;
+      }
+      if (!a) continue;
+      var p = j * 4; o[p] = c[0]; o[p + 1] = c[1]; o[p + 2] = c[2]; o[p + 3] = Math.round(255 * a);
+    }
+    return out;
   }
   function runAI() {
     if (aiBusy || !img) return; aiBusy = true;
@@ -795,7 +844,8 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
   // ---------- gestures
   // Move on + Picture/Grid: drag, pinch (and rotate, for the picture) that layer.
   // Move off, or Camera: pinch to zoom and drag to pan the whole view; the picture stays on the paper.
-  function gestureKind() { return (move && target !== 'camera') ? target : 'view'; }
+  // Move on: your fingers place the picture (or the grid). Move off: the picture is locked and a pinch magnifies the view.
+  function gestureKind() { return move ? (target === 'grid' ? 'grid' : 'picture') : 'view'; }
   var pts = new Map(), g = null, lastTap = 0, beforeT = null, beforeGrid = null;
   var stage = $('stage');
   function centre(a) { return a.length >= 2 ? { x: (a[0].x + a[1].x) / 2, y: (a[0].y + a[1].y) / 2 } : a[0]; }
@@ -850,12 +900,15 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
   stage.addEventListener('pointerup', endPointer); stage.addEventListener('pointercancel', endPointer);
   stage.addEventListener('wheel', function (e) {
     if (!img) return; e.preventDefault();
+    if (move && gestureKind() !== 'picture') return;
     var k = e.deltaY < 0 ? 1.08 : 1 / 1.08;
     if (gestureKind() === 'picture') { T.scale *= k; place(); return; }
     var s = Math.min(8, Math.max(1, V.s * k)), wx = (e.clientX - V.x) / V.s, wy = (e.clientY - V.y) / V.s;
     V.s = s; V.x = e.clientX - wx * s; V.y = e.clientY - wy * s; clampView(); placeWorld();
   }, { passive: false });
-  document.addEventListener('gesturestart', function (e) { e.preventDefault(); });  // stop Safari zooming the page
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(function (t) { document.addEventListener(t, function (e) { e.preventDefault(); }, { passive: false }); });
+  document.addEventListener('touchmove', function (e) { if (e.touches && e.touches.length > 1) e.preventDefault(); }, { passive: false });
+  document.addEventListener('dblclick', function (e) { e.preventDefault(); }, { passive: false });
 
   // ---------- undo / redo for picture placement
   function pushUndo(prev) { undoStack.push(prev); if (undoStack.length > 60) undoStack.shift(); redoStack = []; updateUndo(); }
@@ -874,14 +927,17 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
   // ---------- bottom bar
   function setMove(on) { move = on; syncUI(); }
   function setTarget(t) {
-    target = t; syncUI();
-    toast(t === 'camera' ? 'Pinch to zoom in, drag to look around. Double-tap to zoom out.'
+    target = t;
+    if (t === 'camera' && move) move = false;   // zooming needs the picture locked
+    syncUI();
+    toast(t === 'camera' ? 'Picture locked. Pinch to magnify, drag to look around. Double-tap to zoom out.'
       : t === 'grid' ? (move ? 'Drag to move the grid, pinch to change its size.' : 'Turn on Move to drag the grid.')
       : (move ? 'Drag, pinch and twist to place the picture.' : 'Picture locked. Turn on Move to place it.'));
   }
   $('targets').querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { setTarget(b.dataset.t); }); });
   $('moveBtn').addEventListener('click', function () {
     setMove(!move);
+    if (move && target === 'camera') { target = 'picture'; syncUI(); }
     toast(move ? (target === 'grid' ? 'Move on: drag the grid.' : 'Move on: drag, pinch and twist the picture.')
       : 'Locked. Pinch to zoom in on details; the picture stays on your paper.');
   });
@@ -910,6 +966,8 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
   $('values').addEventListener('change', function () { S.values = +this.value; S.step = Math.min(S.step, S.values); idx = null; persist(); reprocess(function () { render(); syncUI(); }); });
   $('simplify').addEventListener('input', function () { $('simplifyOut').textContent = this.value; });
   $('simplify').addEventListener('change', function () { S.simplify = +this.value; idx = null; lineMap = null; aiMap = null; persist(); reprocess(function () { render(); syncUI(); }); });
+  $('aiViewSeg').querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { S.aiView = b.dataset.v; persist(); render(); syncUI(); }); });
+  $('aiStrip').querySelectorAll('.vbtn').forEach(function (b) { b.addEventListener('click', function () { S.aiLayer = +b.dataset.l; if (S.aiView === 'all') S.aiView = 'layered'; persist(); render(); syncUI(); }); });
   $('hl').addEventListener('click', function () { S.hl = (S.hl + 1) % HL.length; persist(); render(); syncUI(); });
   $('colPrev').addEventListener('click', function () { S.color = (S.color + COLORS.length - 1) % COLORS.length; persist(); render(); syncUI(); });
   $('colNext').addEventListener('click', function () { S.color = (S.color + 1) % COLORS.length; persist(); render(); syncUI(); });
@@ -950,6 +1008,12 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
     $('valueRow').hidden = S.mode !== 'values';
     $('simplifyRow').hidden = S.mode === 'photo';
     $('styleRow').hidden = S.mode !== 'lines';
+    $('aiRow').hidden = !(S.mode === 'lines' && S.lineStyle === 'ai');
+    $('aiViewSeg').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.v === S.aiView ? 'true' : 'false'); });
+    var LN = ['Main lines', 'Secondary lines', 'Light lines & texture'], al = Math.min(3, Math.max(1, S.aiLayer));
+    $('aiLabel').textContent = S.aiView === 'all' ? 'Whole sketch' : S.aiView === 'one' ? 'Layer ' + al + ' only · ' + LN[al - 1]
+      : (al === 1 ? 'Layer 1 · ' + LN[0] : 'Layers 1–' + al + ' · adding ' + LN[al - 1].toLowerCase());
+    $('aiStrip').querySelectorAll('.vbtn').forEach(function (b) { b.setAttribute('aria-pressed', S.aiView !== 'all' && +b.dataset.l === al ? 'true' : 'false'); });
     $('styleNote').textContent = S.lineStyle === 'ai' ? 'Full drawing, like a sketch' : 'Main lines only, instant';
     $('styleSeg').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.v === S.lineStyle ? 'true' : 'false'); });
     $('values').value = S.values; $('valuesOut').textContent = S.values; $('opacity').value = S.opacity;

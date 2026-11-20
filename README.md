@@ -19,8 +19,11 @@ and your chosen photo floats see-through on top, so you can draw while watching 
   See `models/README.md` and `models/LICENSE-informative-drawings`.
 - Controls: a top bar (Back, undo, redo, Tools), a Tools sheet with tabs (Picture, Strobe, Grid, Camera, Flashlight),
   and a bottom bar choosing what your fingers move (Picture, Camera, Grid) plus Move, Hide and Opacity.
-- With **Move** on, drag, pinch and twist the picture (or drag the grid). Turn Move off to lock it; then pinch to zoom
-  the whole view (camera, picture and grid together, so the picture stays on the paper). Double-tap to zoom back out.
+- With **Move** on, drag, pinch and twist the picture (or drag the grid). Magnifying only works with the picture locked:
+  turn Move off (choosing Camera does this for you), then pinch to zoom the camera view with the picture on it, so the
+  picture stays on the paper. Double-tap to zoom back out. The browser's own page zoom is blocked.
+- AI sketch comes in three layers, traced in passes: 1 main lines, 2 secondary lines, 3 light lines and texture
+  (strokes grouped by how firmly they are drawn). View them layered, one at a time, or all together.
 - Strobe blinks the picture to compare with your drawing; the grid covers the screen with adjustable colour, opacity and
   cell size; Camera can pause or switch cameras; Flashlight turns on the torch where the browser allows it.
 - Opacity, mirror and line colour; the screen is kept awake.
