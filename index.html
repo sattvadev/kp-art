@@ -7,149 +7,249 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Trace Camera</title>
 <style>
-/* A camera tracing tool: the live camera fills the screen, the picture floats on top,
-   controls sit in one bar at the bottom. Dark UI so the camera image stays the focus. */
+/* A camera tracing tool. The camera fills the screen; the picture and the grid ride on it.
+   Floating frosted pills: a top bar (back, undo, redo, Tools), a Tools sheet with tabs,
+   and a bottom bar (what your fingers move, then Move / Hide / Opacity). */
 :root {
-  --bar: rgba(15, 17, 21, 0.86); --ink: #f2f3f6; --muted: #a3a9b8; --line: rgba(255,255,255,0.16);
-  --accent: #8ea4ff; --accent-ink: #10142a; --danger: #ff8a7a;
+  --glass: rgba(246, 247, 249, 0.88); --glass-strong: rgba(250, 251, 252, 0.95);
+  --ink: #15171c; --muted: #5d6472; --line: rgba(20, 24, 32, 0.12);
+  --accent: #2f55d4; --accent-ink: #ffffff; --accent-soft: rgba(47, 85, 212, 0.12);
+  --dark: #0f1115; --danger: #c2412d;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; background: #000; color: var(--ink);
-  font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+  font: 15px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
 button, select, input { font: inherit; color: inherit; }
 [hidden] { display: none !important; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
-#video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
-#stage { position: fixed; inset: 0; touch-action: none; overflow: hidden; }
-#overlay { position: absolute; left: 50%; top: 50%; transform-origin: 50% 50%; pointer-events: none;
-  image-rendering: auto; will-change: transform, opacity; }
+/* the world: camera, picture and grid move together when you zoom the view */
+#stage { position: fixed; inset: 0; touch-action: none; overflow: hidden; background: #000; }
+#world { position: absolute; left: 0; top: 0; width: 100vw; height: 100vh; transform-origin: 0 0; will-change: transform; }
+#video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
+#overlay { position: absolute; left: 50%; top: 50%; transform-origin: 50% 50%; pointer-events: none; will-change: transform, opacity; }
+#gridLayer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+/* frosted pills */
+.glass { background: var(--glass); backdrop-filter: blur(14px) saturate(1.4); -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  border: 1px solid rgba(255,255,255,0.6); box-shadow: 0 2px 10px rgba(0,0,0,0.18); }
+.pill { border-radius: 999px; }
+.ibtn { border: 0; background: transparent; padding: 8px 10px; border-radius: 999px; cursor: pointer; display: grid; place-items: center; }
+.ibtn svg { width: 24px; height: 24px; }
+.ibtn:disabled { opacity: .3; cursor: default; }
+
+#top { position: fixed; z-index: 20; left: 0; right: 0; top: 0; display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: calc(8px + env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left)); pointer-events: none; }
+#top > * { pointer-events: auto; }
+#topLeft { display: flex; align-items: center; gap: 2px; padding: 4px 6px; }
+#backBtn { font-weight: 600; font-size: 1.05rem; gap: 4px; display: flex; align-items: center; padding: 8px 10px; }
+#toolsBtn { border: 0; padding: 12px 20px; font-weight: 700; font-size: 1.05rem; color: var(--accent); cursor: pointer; }
+#toolsBtn[aria-expanded="true"] { background: var(--accent); color: var(--accent-ink); }
+
+/* Tools sheet */
+#tools { position: fixed; z-index: 19; left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right));
+  top: calc(66px + env(safe-area-inset-top)); display: grid; gap: 8px; }
+#tabs { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px; }
+#tabs::-webkit-scrollbar { display: none; }
+#tabs button { flex: none; border: 0; padding: 10px 18px; border-radius: 999px; cursor: pointer; font-weight: 600; }
+#tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
+.card { border-radius: 22px; padding: 14px 16px; max-height: min(52vh, 460px); overflow-y: auto; display: grid; gap: 12px; }
+.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.ctl { display: grid; justify-items: center; gap: 6px; min-width: 64px; }
+.ctl > span { font-size: .9rem; color: var(--ink); }
+.grow { flex: 1 1 180px; min-width: 0; display: grid; gap: 6px; }
+.grow > span { font-size: .9rem; text-align: center; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.switch { width: 58px; height: 34px; border-radius: 999px; border: 0; background: #b9bec8; position: relative; cursor: pointer; padding: 0; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 28px; height: 28px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .15s; }
+.switch[aria-checked="true"] { background: var(--accent); }
+.switch[aria-checked="true"]::after { transform: translateX(24px); }
+.step2 { display: inline-flex; border-radius: 999px; background: rgba(20,24,32,0.08); }
+.step2 button { border: 0; background: transparent; width: 46px; height: 36px; font-size: 1.3rem; cursor: pointer; }
+.step2 button + button { border-left: 1px solid var(--line); }
+.seg { display: inline-flex; border-radius: 999px; background: rgba(20,24,32,0.08); padding: 3px; }
+.seg button { border: 0; background: transparent; padding: 7px 13px; border-radius: 999px; cursor: pointer; color: var(--muted); font-weight: 500; white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: #fff; color: var(--ink); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+.chip { border: 1px solid var(--line); background: rgba(255,255,255,0.7); border-radius: 999px; padding: 7px 13px; cursor: pointer; white-space: nowrap; }
+.chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.note { font-size: .82rem; color: var(--muted); }
+.swatchDot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line); display: inline-block; }
+.strip { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(48px, 1fr); gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.strip::-webkit-scrollbar { display: none; }
+.vbtn { display: grid; gap: 3px; justify-items: center; padding: 4px; border-radius: 12px; border: 2px solid transparent; background: rgba(255,255,255,0.6); cursor: pointer; min-width: 0; }
+.vbtn i { display: grid; place-items: center; width: 100%; aspect-ratio: 1 / 1; max-height: 44px; border-radius: 8px; font-style: normal; font-weight: 700; border: 1px solid var(--line); }
+.vbtn span { font-size: .7rem; color: var(--muted); white-space: nowrap; }
+.vbtn[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.vbtn[aria-pressed="true"] span { color: var(--ink); font-weight: 600; }
+
+/* bottom bar */
+#bottom { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; display: grid; justify-items: center; gap: 10px;
+  padding: 0 max(12px, env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); pointer-events: none; }
+#bottom > * { pointer-events: auto; }
+#targets { display: flex; gap: 4px; padding: 6px 10px; border-radius: 22px; }
+#targets button { border: 0; background: transparent; display: grid; justify-items: center; gap: 2px; padding: 4px 12px; cursor: pointer; color: var(--ink); font-size: .74rem; border-radius: 14px; }
+#targets button svg { width: 28px; height: 28px; }
+#targets button[aria-pressed="true"] { color: var(--accent); font-weight: 600; }
+#actions { display: flex; gap: 14px; justify-content: center; }
+#actions button { border: 0; min-width: 104px; padding: 15px 22px; border-radius: 999px; font-weight: 700; font-size: 1.15rem; cursor: pointer; }
+#actions button[aria-pressed="true"] { color: var(--accent); }
+#opacityPop { width: min(420px, 92vw); border-radius: 18px; padding: 10px 16px; display: grid; gap: 4px; }
+#opacityPop span { font-size: .85rem; text-align: center; color: var(--muted); }
+
+#toast { position: fixed; z-index: 30; left: 50%; top: calc(70px + env(safe-area-inset-top)); transform: translateX(-50%);
+  border-radius: 14px; padding: 9px 14px; font-size: .92rem; max-width: 84vw; text-align: center; background: var(--glass-strong); box-shadow: 0 2px 12px rgba(0,0,0,.25); }
+#zoomTag { position: fixed; z-index: 18; right: max(14px, env(safe-area-inset-right)); top: calc(70px + env(safe-area-inset-top));
+  border-radius: 999px; padding: 5px 10px; font-size: .8rem; font-weight: 600; }
 
 /* start screen */
-#start { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: #0f1115;
+#start { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: var(--dark); color: #f2f3f6;
   padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); overflow-y: auto; }
-.card { width: min(440px, 100%); display: grid; gap: 18px; }
-.card h1 { margin: 0; font-size: 1.8rem; letter-spacing: -0.01em; }
-.card p { margin: 0; color: var(--muted); }
-.steps { margin: 0; padding-left: 1.2em; color: var(--muted); display: grid; gap: 6px; }
-.big { display: block; width: 100%; padding: 15px; border-radius: 12px; border: 1px solid var(--line);
-  background: #1b1f28; text-align: center; font-weight: 600; cursor: pointer; position: relative; overflow: hidden; }
-.big.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.startcard { width: min(440px, 100%); display: grid; gap: 18px; }
+.startcard h1 { margin: 0; font-size: 1.8rem; letter-spacing: -0.01em; }
+.startcard p { margin: 0; color: #a3a9b8; }
+.steps { margin: 0; padding-left: 1.2em; color: #a3a9b8; display: grid; gap: 6px; }
+.big { display: block; width: 100%; padding: 15px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.16);
+  background: #1b1f28; color: #f2f3f6; text-align: center; font-weight: 600; cursor: pointer; position: relative; overflow: hidden; }
+.big.primary { background: #4f72f0; border-color: #4f72f0; color: #fff; }
 .big:disabled { opacity: .4; cursor: default; }
 .big input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 #thumbWrap { display: flex; align-items: center; gap: 12px; }
-#thumb { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
-.msg { color: var(--danger); }
-
-/* bottom bar */
-#bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--bar);
-  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-top: 1px solid var(--line);
-  padding: 10px max(12px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
-  display: grid; gap: 10px; }
-.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.row.scroll { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-.row.scroll::-webkit-scrollbar { display: none; }
-.chip { flex: none; border: 1px solid var(--line); background: rgba(255,255,255,0.06); border-radius: 999px;
-  padding: 8px 13px; cursor: pointer; white-space: nowrap; }
-.chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
-.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: rgba(255,255,255,0.05); flex: none; }
-.seg button { border: 0; background: transparent; padding: 7px 12px; border-radius: 999px; cursor: pointer; color: var(--muted); white-space: nowrap; }
-.seg button[aria-pressed="true"] { background: var(--ink); color: #0f1115; font-weight: 600; }
-.slider { display: flex; align-items: center; gap: 10px; flex: 1 1 200px; min-width: 0; }
-.slider label { color: var(--muted); white-space: nowrap; }
-.slider input { flex: 1; min-width: 0; accent-color: var(--accent); }
-.stepper { display: flex; align-items: center; gap: 8px; flex: 1 1 260px; min-width: 0; }
-.stepper button { width: 44px; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,0.08); font-size: 1.3rem; cursor: pointer; flex: none; }
-.stepper button:disabled { opacity: .35; }
-#stepLabel { flex: 1; min-width: 0; font-weight: 600; font-size: .92rem; }
-#peek { font-weight: 600; }
-.strip { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(50px, 1fr); gap: 6px; overflow-x: auto; scrollbar-width: none; }
-.strip::-webkit-scrollbar { display: none; }
-.vbtn { display: grid; gap: 3px; justify-items: center; padding: 4px; border-radius: 10px; border: 2px solid transparent;
-  background: rgba(255,255,255,0.05); cursor: pointer; min-width: 0; }
-.vbtn i { display: grid; place-items: center; width: 100%; aspect-ratio: 1 / 1; max-height: 46px; border-radius: 7px;
-  font-style: normal; font-weight: 700; font-size: 1rem; border: 1px solid rgba(255,255,255,0.18); }
-.vbtn span { font-size: .72rem; line-height: 1.1; color: var(--muted); white-space: nowrap; }
-.vbtn span b { color: var(--ink); }
-.vbtn[aria-pressed="true"] { border-color: var(--accent); background: rgba(142,164,255,0.16); }
-.vbtn[aria-pressed="true"] span { color: var(--ink); }
-
-/* top-right floating buttons */
-#float { position: fixed; z-index: 21; top: calc(10px + env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right));
-  display: flex; gap: 8px; }
-#float button { border: 1px solid var(--line); background: var(--bar); border-radius: 999px; padding: 9px 13px; cursor: pointer;
-  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-#float button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
-#toast { position: fixed; z-index: 25; left: 50%; top: calc(14px + env(safe-area-inset-top)); transform: translateX(-50%);
-  background: var(--bar); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: .9rem; max-width: 70vw; text-align: center; }
-:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+#thumb { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; }
+.msg { color: #ff9a88; }
 </style>
 </head>
 <body>
-<video id="video" playsinline muted autoplay></video>
-<div id="stage"><canvas id="overlay"></canvas></div>
-
-<div id="float" hidden>
-  <button type="button" id="hideBar" aria-pressed="false">Hide controls</button>
-  <button type="button" id="lock" aria-pressed="false">Lock</button>
+<div id="stage">
+  <div id="world">
+    <video id="video" playsinline muted autoplay></video>
+    <canvas id="overlay"></canvas>
+    <canvas id="gridLayer"></canvas>
+  </div>
 </div>
+
+<header id="top" hidden>
+  <div id="topLeft" class="glass pill">
+    <button type="button" class="ibtn" id="backBtn" aria-label="Back to start">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>Back</button>
+    <button type="button" class="ibtn" id="undoBtn" aria-label="Undo picture move" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M9.5 8.5L7 11l2.5 2.5"/><path d="M7 11h6.5a3 3 0 010 6H11"/></svg></button>
+    <button type="button" class="ibtn" id="redoBtn" aria-label="Redo picture move" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M14.5 8.5L17 11l-2.5 2.5"/><path d="M17 11h-6.5a3 3 0 000 6H13"/></svg></button>
+  </div>
+  <button type="button" id="toolsBtn" class="glass pill" aria-expanded="false" aria-controls="tools">Tools</button>
+</header>
+
+<section id="tools" hidden aria-label="Tools">
+  <div id="tabs" role="tablist">
+    <button type="button" role="tab" class="glass" data-tab="picture" aria-selected="true">Picture</button>
+    <button type="button" role="tab" class="glass" data-tab="strobe" aria-selected="false">Strobe</button>
+    <button type="button" role="tab" class="glass" data-tab="grid" aria-selected="false">Grid</button>
+    <button type="button" role="tab" class="glass" data-tab="camera" aria-selected="false">Camera</button>
+    <button type="button" role="tab" class="glass" data-tab="light" aria-selected="false">Flashlight</button>
+  </div>
+
+  <div class="card glass" data-panel="picture">
+    <div class="row">
+      <div class="seg" id="modeSeg" role="group" aria-label="What to trace">
+        <button type="button" data-v="photo" aria-pressed="true">Photo</button>
+        <button type="button" data-v="lines" aria-pressed="false">Outlines</button>
+        <button type="button" data-v="values" aria-pressed="false">Values</button>
+      </div>
+      <button type="button" class="chip" id="fit">Fit to screen</button>
+    </div>
+    <div class="row" id="styleRow" hidden>
+      <div class="seg" id="styleSeg" role="group" aria-label="Line style">
+        <button type="button" data-v="ai" aria-pressed="true">AI sketch</button>
+        <button type="button" data-v="strokes" aria-pressed="false">Simple strokes</button>
+      </div>
+      <span id="styleNote" class="note">Full drawing</span>
+    </div>
+    <div id="valueRow" hidden style="display:grid;gap:8px">
+      <div class="row">
+        <div class="seg" id="viewSeg" role="group" aria-label="How to show the value">
+          <button type="button" data-v="layered" aria-pressed="true">Layered</button>
+          <button type="button" data-v="stencil" aria-pressed="false">Stencil</button>
+          <button type="button" data-v="all" aria-pressed="false">All</button>
+        </div>
+        <button type="button" class="chip" id="hl">Colour: coral</button>
+      </div>
+      <div id="stepLabel" aria-live="polite" style="font-weight:600;font-size:.92rem">Value 1</div>
+      <div class="strip" id="strip" role="group" aria-label="Values, lightest to darkest"></div>
+      <div class="grow"><input id="values" type="range" min="3" max="7" step="1" value="5" aria-label="Number of values"><span>Values: <output id="valuesOut">5</output></span></div>
+    </div>
+    <div class="grow" id="simplifyRow" hidden><input id="simplify" type="range" min="0" max="10" step="1" value="3" aria-label="Simplify"><span>Simplify: <output id="simplifyOut">3</output> <span class="note">(0 = most detail)</span></span></div>
+    <div class="row" id="lineColorRow">
+      <span class="note">Line colour</span>
+      <div class="step2"><button type="button" id="colPrev" aria-label="Previous line colour">−</button><button type="button" id="colNext" aria-label="Next line colour">+</button></div>
+      <i class="swatchDot" id="colDot"></i>
+      <button type="button" class="chip" id="mirror" aria-pressed="false">Mirror</button>
+      <button type="button" class="chip" id="newPhoto">New photo</button>
+    </div>
+  </div>
+
+  <div class="card glass" data-panel="strobe" hidden>
+    <div class="row">
+      <div class="ctl"><button type="button" class="switch" id="strobeSw" role="switch" aria-checked="false" aria-label="Strobe"></button><span>Strobe</span></div>
+      <div class="grow"><input id="strobeSpeed" type="range" min="1" max="10" step="1" value="4" aria-label="Strobe speed"><span>Speed</span></div>
+    </div>
+    <div class="note">The picture blinks on and off, so you can compare your drawing with it without touching the screen.</div>
+  </div>
+
+  <div class="card glass" data-panel="grid" hidden>
+    <div class="row">
+      <div class="ctl"><button type="button" class="switch" id="gridSw" role="switch" aria-checked="false" aria-label="Show grid"></button><span>Show Grid</span></div>
+      <div class="ctl"><div class="step2"><button type="button" id="gridColPrev" aria-label="Previous grid colour">−</button><button type="button" id="gridColNext" aria-label="Next grid colour">+</button></div><span>Colour <i class="swatchDot" id="gridDot" style="width:14px;height:14px;vertical-align:-2px"></i></span></div>
+      <div class="grow"><input id="gridOpacity" type="range" min="10" max="100" step="1" value="80" aria-label="Grid opacity"><span>Grid Opacity</span></div>
+    </div>
+    <div class="grow"><input id="gridSize" type="range" min="30" max="200" step="5" value="90" aria-label="Grid cell size"><span>Cell size</span></div>
+    <div class="note">Choose <b>Grid</b> at the bottom, then turn on Move, to drag the grid into place.</div>
+  </div>
+
+  <div class="card glass" data-panel="camera" hidden>
+    <div class="row">
+      <div class="ctl"><button type="button" class="ibtn" id="flipCam" aria-label="Switch camera" style="background:rgba(20,24,32,.08)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:30px;height:30px"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z"/><path d="M9.5 13.5a2.5 2.5 0 004.6 1.2M14.5 12.5a2.5 2.5 0 00-4.6-1.2"/><path d="M14.4 14.9l-.3-1.9 1.8.5M9.6 11.1l.3 1.9-1.8-.5"/></svg></button><span>Switch</span></div>
+      <div class="ctl"><button type="button" class="switch" id="pauseSw" role="switch" aria-checked="false" aria-label="Pause camera"></button><span>Pause</span></div>
+      <div class="ctl"><button type="button" class="chip" id="resetZoom">Reset zoom</button><span class="note" id="zoomNote">Zoom 1.0×</span></div>
+    </div>
+    <div class="note">Pause freezes the camera picture. To zoom in for detail, turn Move off (or choose <b>Camera</b> at the bottom) and pinch. Double-tap to zoom back out.</div>
+  </div>
+
+  <div class="card glass" data-panel="light" hidden>
+    <div class="row">
+      <div class="ctl"><button type="button" class="switch" id="torchSw" role="switch" aria-checked="false" aria-label="Flashlight"></button><span>Flashlight</span></div>
+      <div class="note" id="torchNote" style="flex:1 1 180px">Turns on your phone's light. Browsers can't set its brightness, so it's on or off.</div>
+    </div>
+  </div>
+</section>
+
+<div id="zoomTag" class="glass" hidden>2.0×</div>
 <div id="toast" hidden></div>
 
-<div id="bar" hidden>
-  <div class="row scroll" role="group" aria-label="What to trace">
-    <div class="seg" id="modeSeg">
-      <button type="button" data-v="photo" aria-pressed="true">Photo</button>
-      <button type="button" data-v="lines" aria-pressed="false">Outlines</button>
-      <button type="button" data-v="values" aria-pressed="false">Values</button>
-    </div>
-    <button type="button" class="chip" id="peek">Hold to peek</button>
+<footer id="bottom" hidden>
+  <div id="opacityPop" class="glass" hidden><input id="opacity" type="range" min="10" max="100" step="1" value="55" aria-label="Picture opacity"><span>Picture opacity</span></div>
+  <div id="targets" class="glass" role="group" aria-label="What your fingers move">
+    <button type="button" data-t="picture" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M3.5 17l5-5 4 4 3-3 5 5"/></svg>Picture</button>
+    <button type="button" data-t="camera" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 8h3.5l2-2.5h7L17.5 8H21v11H3z"/><circle cx="12" cy="13" r="3.6"/></svg>Camera</button>
+    <button type="button" data-t="grid" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>Grid</button>
   </div>
-  <div id="valueRow" hidden style="display:grid;gap:8px">
-    <div class="row scroll">
-      <div class="seg" id="viewSeg" role="group" aria-label="How to show the value">
-        <button type="button" data-v="layered" aria-pressed="true">Layered</button>
-        <button type="button" data-v="stencil" aria-pressed="false">Stencil</button>
-        <button type="button" data-v="all" aria-pressed="false">All</button>
-      </div>
-      <button type="button" class="chip" id="hl">Colour: coral</button>
-    </div>
-    <div id="stepLabel" aria-live="polite" style="font-weight:600;font-size:.92rem">Value 1</div>
-    <div class="strip" id="strip" role="group" aria-label="Values, lightest to darkest"></div>
-    <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted);margin-top:-4px"><span>Lightest</span><span>Darkest →</span></div>
-    <div class="slider"><label for="values">Values</label><input id="values" type="range" min="3" max="7" step="1" value="5"><output id="valuesOut">5</output></div>
+  <div id="actions">
+    <button type="button" class="glass" id="moveBtn" aria-pressed="true">Move</button>
+    <button type="button" class="glass" id="hideBtn" aria-pressed="false">Hide</button>
+    <button type="button" class="glass" id="opacityBtn" aria-pressed="false" aria-controls="opacityPop">Opacity</button>
   </div>
-  <div class="row" id="styleRow" hidden>
-    <div class="seg" id="styleSeg" role="group" aria-label="Line style">
-      <button type="button" data-v="ai" aria-pressed="true">AI sketch</button>
-      <button type="button" data-v="strokes" aria-pressed="false">Simple strokes</button>
-    </div>
-    <span id="styleNote" style="font-size:.8rem;color:var(--muted)">Full drawing</span>
-  </div>
-  <div class="row" id="simplifyRow" hidden>
-    <div class="slider"><label for="simplify">Simplify</label><input id="simplify" type="range" min="0" max="10" step="1" value="3"><output id="simplifyOut">3</output></div>
-  </div>
-  <div class="row">
-    <div class="slider"><label for="opacity">See-through</label><input id="opacity" type="range" min="10" max="100" step="1" value="55"></div>
-  </div>
-  <div class="row scroll">
-    <button type="button" class="chip" id="fit">Fit to screen</button>
-    <button type="button" class="chip" id="mirror" aria-pressed="false">Mirror</button>
-    <button type="button" class="chip" id="grid" aria-pressed="false">Grid</button>
-    <button type="button" class="chip" id="color">Lines: black</button>
-    <button type="button" class="chip" id="torch" aria-pressed="false" hidden>Torch</button>
-    <button type="button" class="chip" id="newPhoto">New photo</button>
-  </div>
-</div>
+</footer>
 
 <section id="start" aria-labelledby="startTitle">
-  <div class="card">
+  <div class="startcard">
     <h1 id="startTitle">Trace Camera</h1>
     <p>Your picture floats over the live camera, so you can trace it onto paper while watching your pencil on screen.</p>
     <ol class="steps">
       <li>Prop your phone 25–40 cm above the paper, camera facing down (a stand, a glass or a stack of books).</li>
       <li>Choose a photo, then start the camera.</li>
-      <li>Drag and pinch the picture to fit the paper, then tap <b>Lock</b>.</li>
-      <li>Tap <b>Values</b> to see the picture broken into its values. Tap any value to trace it.</li>
-      <li>Draw while looking at the screen. Hold <b>peek</b> to check your lines.</li>
+      <li>With <b>Move</b> on, drag and pinch the picture to fit the paper. Then turn <b>Move</b> off to lock it.</li>
+      <li>Pinch to zoom in on details: the picture stays lined up with your paper.</li>
+      <li><b>Tools</b> has outlines, values, strobe, grid, camera and flashlight.</li>
     </ol>
     <div id="thumbWrap" hidden><img id="thumb" alt="Chosen photo"><span id="thumbName"></span></div>
     <label class="big" for="file">Choose a photo<input type="file" id="file" accept="image/*"></label>
@@ -165,27 +265,35 @@ button, select, input { font: inherit; color: inherit; }
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
   var MAX_SIDE = 1100;
-  var COLORS = [['black', [20, 18, 16]], ['white', [255, 255, 255]], ['red', [235, 45, 45]], ['blue', [40, 90, 255]]];
+  var COLORS = [['black', [20, 18, 16]], ['white', [255, 255, 255]], ['red', [235, 45, 45]], ['blue', [40, 90, 255]], ['green', [30, 160, 80]]];
   // breakdown highlight colours
   var HL = [['coral', [242, 104, 84]], ['blue', [58, 112, 240]], ['green', [36, 168, 96]], ['yellow', [246, 196, 38]]];
   var NAMES = { 3: ['Paper', 'Mid', 'Darkest'], 4: ['Paper', 'Light', 'Dark', 'Darkest'],
     5: ['Paper', 'Light', 'Mid', 'Dark', 'Darkest'], 6: ['Paper', 'Light', 'Light mid', 'Dark mid', 'Dark', 'Darkest'],
     7: ['Paper', 'Pale', 'Light', 'Mid', 'Dark mid', 'Dark', 'Darkest'] };
 
-  var S = { mode: 'photo', view: 'layered', values: 5, simplify: 3, hl: 0, lineStyle: 'ai', step: 1, opacity: 55, mirror: false, grid: false, color: 0 };
+  var S = { mode: 'photo', view: 'layered', values: 5, simplify: 3, hl: 0, lineStyle: 'ai', step: 1, opacity: 55, mirror: false,
+            color: 0, grid: false, gridColor: 3, gridOpacity: 80, gridSize: 90, strobeSpeed: 4 };
+  var SAVED = ['mode', 'view', 'values', 'simplify', 'hl', 'lineStyle', 'opacity', 'mirror', 'color', 'grid', 'gridColor', 'gridOpacity', 'gridSize', 'strobeSpeed'];
   try { var sv = JSON.parse(localStorage.getItem('trace-camera') || 'null');
-    if (sv) ['mode', 'view', 'values', 'simplify', 'hl', 'lineStyle', 'opacity', 'mirror', 'grid', 'color'].forEach(function (k) { if (k in sv) S[k] = sv[k]; });
+    if (sv) SAVED.forEach(function (k) { if (k in sv) S[k] = sv[k]; });
     if (sv && !sv.v2) S.lineStyle = 'ai';   // one-time switch: AI sketch became the default outline style
+    if (typeof S.grid !== 'boolean') S.grid = false;
   } catch (e) {}
   S.v2 = 1;
   if (S.mode !== 'photo' && S.mode !== 'lines' && S.mode !== 'values') S.mode = 'values';  // older saved modes
+  if (S.color >= COLORS.length) S.color = 0;
   function persist() { try { localStorage.setItem('trace-camera', JSON.stringify(S)); } catch (e) {} }
 
-  var T = { x: 0, y: 0, scale: 1, rot: 0 };   // overlay placement on screen
-  var locked = false, stream = null, wake = null, torchOn = false;
+  var T = { x: 0, y: 0, scale: 1, rot: 0 };   // picture placement, in world pixels
+  var V = { x: 0, y: 0, s: 1 };              // view zoom: the whole world (camera + picture + grid)
+  var G = { x: 0, y: 0 };                     // grid offset
+  var move = true, target = 'picture', hidden = false, strobeOn = false, strobePhase = true, strobeTimer = null;
+  var stream = null, wake = null, torchOn = false, facing = 'environment', paused = false;
   var img = null, idx = null, lineMap = null, aiMap = null;  // photo, value map, stroke drawing, AI sketch
   var srcCanvas = document.createElement('canvas');
   var overlay = $('overlay'), octx = overlay.getContext('2d');
+  var undoStack = [], redoStack = [];
 
   function toastSticky(t) { var el = $('toast'); clearTimeout(toast.t); el.textContent = t; el.hidden = false; }
   function toast(t) { var el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(function () { el.hidden = true; }, 2200); }
@@ -205,8 +313,9 @@ button, select, input { font: inherit; color: inherit; }
       $('thumb').src = url; $('thumbName').textContent = f.name; $('thumbWrap').hidden = false;
       $('go').disabled = false; $('err').hidden = true;
       S.step = 1; idx = null; lineMap = null; aiMap = null; $('strip').dataset.key = '';
+      undoStack = []; redoStack = []; updateUndo();
       if (!$('start').hidden) return;
-      fit(); render(); syncUI();
+      setMove(true); fit(); render(); syncUI();
     };
     im.onerror = function () { showErr('That file could not be opened as a picture. Try a JPG, PNG or HEIC photo.'); };
     im.src = url;
@@ -215,36 +324,37 @@ button, select, input { font: inherit; color: inherit; }
   function showErr(t) { $('err').textContent = t; $('err').hidden = false; }
 
   // ---------- camera
+  function startCamera() {
+    if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
+    return navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1080 } } })
+      .then(function (s) {
+        stream = s; var v = $('video'); v.srcObject = s; paused = false; torchOn = false;
+        var pl = v.play(); if (pl && pl.catch) pl.catch(function () {});
+        var track = s.getVideoTracks()[0], caps = track && track.getCapabilities ? track.getCapabilities() : {};
+        var hasTorch = !!(caps && caps.torch);
+        $('torchSw').disabled = !hasTorch;
+        $('torchNote').textContent = hasTorch ? "Turns on your phone's light. Browsers can't set its brightness, so it's on or off."
+          : "This browser doesn't give web pages control of the flashlight on this phone.";
+        syncUI();
+      });
+  }
   $('go').addEventListener('click', function () {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       showErr('This browser cannot use the camera here. Open the page in Safari or Chrome over https.'); return;
     }
-    navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } } })
-      .then(function (s) {
-        stream = s; var v = $('video'); v.srcObject = s;
-        var pl = v.play(); if (pl && pl.catch) pl.catch(function () {});
-        $('start').hidden = true; $('bar').hidden = false; $('float').hidden = false;
-        var track = s.getVideoTracks()[0], caps = track && track.getCapabilities ? track.getCapabilities() : {};
-        $('torch').hidden = !(caps && caps.torch);
-        keepAwake(); fit(); render(); syncUI();
-      })
-      .catch(function (e) {
-        showErr(e && e.name === 'NotAllowedError'
-          ? 'Camera access was blocked. Allow the camera for this site in your browser settings, then try again.'
-          : 'The camera could not start (' + (e && e.name || 'error') + '). Close other apps using the camera and try again.');
-      });
+    startCamera().then(function () {
+      $('start').hidden = true; $('top').hidden = false; $('bottom').hidden = false;
+      keepAwake(); setMove(true); fit(); drawGridLayer(); render(); syncUI();
+    }).catch(function (e) {
+      showErr(e && e.name === 'NotAllowedError'
+        ? 'Camera access was blocked. Allow the camera for this site in your browser settings, then try again.'
+        : 'The camera could not start (' + (e && e.name || 'error') + '). Close other apps using the camera and try again.');
+    });
   });
   function keepAwake() {
     try { if (navigator.wakeLock) navigator.wakeLock.request('screen').then(function (l) { wake = l; }).catch(function () {}); } catch (e) {}
   }
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && stream) keepAwake(); });
-  $('torch').addEventListener('click', function () {
-    var track = stream && stream.getVideoTracks()[0]; if (!track) return;
-    torchOn = !torchOn;
-    track.applyConstraints({ advanced: [{ torch: torchOn }] }).catch(function () { torchOn = false; toast('Torch not available'); });
-    this.setAttribute('aria-pressed', torchOn ? 'true' : 'false');
-  });
-  $('newPhoto').addEventListener('click', function () { $('file').click(); });
 
   // ---------- value processing
   // VALUES-BEGIN (pure functions; the test sheet loads this block as-is)
@@ -515,17 +625,17 @@ button, select, input { font: inherit; color: inherit; }
   function render() {
     if (!img) return;
     var w = img.w, h = img.h; overlay.width = w; overlay.height = h;
-    if (S.mode === 'photo') { octx.drawImage(srcCanvas, 0, 0); drawGrid(); place(); return; }
+    if (S.mode === 'photo') { octx.drawImage(srcCanvas, 0, 0); place(); return; }
     if (S.mode === 'lines' && S.lineStyle === 'ai') {
       if (!aiMap) { runAI(); return; }   // loads the model on first use, then draws
-      octx.putImageData(inkImage(aiMap), 0, 0); drawGrid(); place(); return;
+      octx.putImageData(inkImage(aiMap), 0, 0); place(); return;
     }
     if (S.mode === 'lines') {
       if (!lineMap) { reprocess(function () { render(); syncUI(); }); return; }   // worked out on first need
-      octx.putImageData(inkImage(lineMap), 0, 0); drawGrid(); place(); return;
+      octx.putImageData(inkImage(lineMap), 0, 0); place(); return;
     }
     if (!idx) { reprocess(function () { render(); syncUI(); }); return; }   // values are worked out on first need
-    octx.putImageData(buildImage(S.mode, S.view, S.step), 0, 0); drawGrid(); place();
+    octx.putImageData(buildImage(S.mode, S.view, S.step), 0, 0); place();
   }
   // The line drawing as an overlay: lines about 3 px wide at working size, transparent elsewhere.
   // Ink (0..1 per pixel) as an overlay in the chosen line colour.
@@ -635,64 +745,205 @@ button, select, input { font: inherit; color: inherit; }
       strip.appendChild(b);
     }
   }
-  function drawGrid() {
-    if (!S.grid) return;
-    var w = overlay.width, h = overlay.height, c = COLORS[S.color][1];
-    octx.save(); octx.strokeStyle = 'rgba(' + c.join(',') + ',0.9)'; octx.lineWidth = Math.max(2, Math.round(Math.max(w, h) / 400));
-    for (var i = 1; i < 4; i++) {
-      octx.beginPath(); octx.moveTo(w * i / 4, 0); octx.lineTo(w * i / 4, h); octx.stroke();
-      octx.beginPath(); octx.moveTo(0, h * i / 4); octx.lineTo(w, h * i / 4); octx.stroke();
-    }
-    octx.strokeRect(1, 1, w - 2, h - 2); octx.restore();
-  }
 
-  // ---------- placement and gestures
+
+  // ---------- placement: the picture lives in world pixels; the view zoom scales the whole world
+  function barEdges() {
+    var top = $('top').hidden ? 0 : $('top').getBoundingClientRect().bottom;
+    var bot = $('bottom').hidden ? window.innerHeight : $('bottom').getBoundingClientRect().top;
+    return { top: top, bot: bot };
+  }
   function fit() {
     if (!img) return;
-    var W = window.innerWidth, H = window.innerHeight - ($('bar').hidden ? 0 : $('bar').offsetHeight);
-    T.scale = Math.min(W / img.w, H / img.h) * 0.92; T.x = 0; T.y = -($('bar').hidden ? 0 : $('bar').offsetHeight) / 2; T.rot = 0;
+    var W = window.innerWidth, H = window.innerHeight, b = barEdges(), avail = Math.max(120, b.bot - b.top - 16);
+    T.scale = Math.min(W * 0.94 / img.w, avail / img.h); T.rot = 0; T.x = 0; T.y = (b.top + b.bot) / 2 - H / 2;
     place();
   }
   function place() {
+    if (!img) return;
     overlay.style.width = img.w + 'px'; overlay.style.height = img.h + 'px';
     overlay.style.transform = 'translate(-50%, -50%) translate(' + T.x + 'px,' + T.y + 'px) rotate(' + T.rot + 'rad) scale(' + (S.mirror ? -T.scale : T.scale) + ',' + T.scale + ')';
     overlay.style.opacity = S.opacity / 100;
+    overlay.style.visibility = (hidden || (strobeOn && !strobePhase)) ? 'hidden' : 'visible';
   }
-  var pts = new Map(), g = null;
+  function placeWorld() {
+    $('world').style.transform = 'translate(' + V.x + 'px,' + V.y + 'px) scale(' + V.s + ')';
+    $('zoomTag').hidden = V.s < 1.05; $('zoomTag').textContent = V.s.toFixed(1) + '×';
+    $('zoomNote').textContent = 'Zoom ' + V.s.toFixed(1) + '×';
+  }
+  function clampView() {
+    var W = window.innerWidth, H = window.innerHeight;
+    V.s = Math.min(8, Math.max(1, V.s));
+    V.x = Math.min(0, Math.max(W - W * V.s, V.x)); V.y = Math.min(0, Math.max(H - H * V.s, V.y));
+  }
+  function resetView() { V.x = 0; V.y = 0; V.s = 1; placeWorld(); }
+
+  // ---------- grid over the whole screen; it zooms with the view and can be dragged
+  function drawGridLayer() {
+    var c = $('gridLayer'), dpr = Math.min(3, window.devicePixelRatio || 1), W = window.innerWidth, H = window.innerHeight;
+    c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
+    var x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, W, H);
+    if (!S.grid) return;
+    var col = COLORS[S.gridColor][1], sz = S.gridSize, ox = ((G.x % sz) + sz) % sz, oy = ((G.y % sz) + sz) % sz;
+    x.strokeStyle = 'rgba(' + col.join(',') + ',' + (S.gridOpacity / 100) + ')'; x.lineWidth = 1.5;
+    x.beginPath();
+    for (var gx = ox; gx <= W; gx += sz) { x.moveTo(gx, 0); x.lineTo(gx, H); }
+    for (var gy = oy; gy <= H; gy += sz) { x.moveTo(0, gy); x.lineTo(W, gy); }
+    x.stroke();
+  }
+
+  // ---------- gestures
+  // Move on + Picture/Grid: drag, pinch (and rotate, for the picture) that layer.
+  // Move off, or Camera: pinch to zoom and drag to pan the whole view; the picture stays on the paper.
+  function gestureKind() { return (move && target !== 'camera') ? target : 'view'; }
+  var pts = new Map(), g = null, lastTap = 0, beforeT = null, beforeGrid = null;
   var stage = $('stage');
+  function centre(a) { return a.length >= 2 ? { x: (a[0].x + a[1].x) / 2, y: (a[0].y + a[1].y) / 2 } : a[0]; }
   function startGesture() {
-    var a = Array.from(pts.values());
-    if (a.length === 1) g = { one: true, x0: a[0].x, y0: a[0].y, tx: T.x, ty: T.y };
-    else if (a.length >= 2) {
-      var dx = a[1].x - a[0].x, dy = a[1].y - a[0].y;
-      g = { one: false, d0: Math.hypot(dx, dy), a0: Math.atan2(dy, dx), s0: T.scale, r0: T.rot,
-            mx0: (a[0].x + a[1].x) / 2, my0: (a[0].y + a[1].y) / 2, tx: T.x, ty: T.y };
-    }
+    var a = Array.from(pts.values()); if (!a.length) { g = null; return; }
+    var c = centre(a);
+    g = { kind: gestureKind(), n: Math.min(2, a.length), cx: c.x, cy: c.y,
+          d: a.length >= 2 ? Math.hypot(a[1].x - a[0].x, a[1].y - a[0].y) : 0,
+          ang: a.length >= 2 ? Math.atan2(a[1].y - a[0].y, a[1].x - a[0].x) : 0,
+          T: { x: T.x, y: T.y, scale: T.scale, rot: T.rot }, V: { x: V.x, y: V.y, s: V.s }, G: { x: G.x, y: G.y }, size: S.gridSize,
+          moved: g ? g.moved : false };
   }
   stage.addEventListener('pointerdown', function (e) {
-    if (locked || !img) return;
+    if (!img) return;
     try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+    if (!pts.size) { beforeT = { x: T.x, y: T.y, scale: T.scale, rot: T.rot }; beforeGrid = null; g = null; }
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); startGesture();
   });
   stage.addEventListener('pointermove', function (e) {
-    if (!pts.has(e.pointerId) || locked || !g) return;
+    if (!pts.has(e.pointerId) || !g) return;
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    var a = Array.from(pts.values());
-    if (g.one && a.length === 1) { T.x = g.tx + a[0].x - g.x0; T.y = g.ty + a[0].y - g.y0; }
-    else if (!g.one && a.length >= 2) {
-      var dx = a[1].x - a[0].x, dy = a[1].y - a[0].y;
-      T.scale = Math.max(0.05, g.s0 * Math.hypot(dx, dy) / g.d0);
-      T.rot = g.r0 + Math.atan2(dy, dx) - g.a0;
-      T.x = g.tx + (a[0].x + a[1].x) / 2 - g.mx0; T.y = g.ty + (a[0].y + a[1].y) / 2 - g.my0;
+    var a = Array.from(pts.values()), c = centre(a);
+    var d = a.length >= 2 ? Math.hypot(a[1].x - a[0].x, a[1].y - a[0].y) : 0;
+    var ang = a.length >= 2 ? Math.atan2(a[1].y - a[0].y, a[1].x - a[0].x) : 0;
+    var dx = c.x - g.cx, dy = c.y - g.cy, ratio = (g.n >= 2 && g.d > 0 && a.length >= 2) ? d / g.d : 1;
+    if (Math.abs(dx) + Math.abs(dy) > 6 || Math.abs(ratio - 1) > 0.03) g.moved = true;
+    if (g.kind === 'view') {
+      var s = Math.min(8, Math.max(1, g.V.s * ratio)), wx = (g.cx - g.V.x) / g.V.s, wy = (g.cy - g.V.y) / g.V.s;
+      V.s = s; V.x = c.x - wx * s; V.y = c.y - wy * s; clampView(); placeWorld();
+    } else if (g.kind === 'picture') {
+      T.x = g.T.x + dx / V.s; T.y = g.T.y + dy / V.s;
+      if (ratio !== 1) { T.scale = Math.max(0.05, g.T.scale * ratio); T.rot = g.T.rot + ang - g.ang; }
+      place();
+    } else {
+      G.x = g.G.x + dx / V.s; G.y = g.G.y + dy / V.s;
+      if (ratio !== 1) S.gridSize = Math.max(30, Math.min(200, Math.round(g.size * ratio)));
+      drawGridLayer();
     }
-    place();
   });
-  function endP(e) { if (!pts.has(e.pointerId)) return; pts.delete(e.pointerId); g = null; if (pts.size) startGesture(); }
-  stage.addEventListener('pointerup', endP); stage.addEventListener('pointercancel', endP);
-  stage.addEventListener('wheel', function (e) { if (locked || !img) return; e.preventDefault(); T.scale *= e.deltaY < 0 ? 1.05 : 1 / 1.05; place(); }, { passive: false });
+  function endPointer(e) {
+    if (!pts.has(e.pointerId)) return;
+    pts.delete(e.pointerId);
+    if (pts.size) { startGesture(); return; }
+    var wasMoved = g && g.moved, kind = g && g.kind; g = null;
+    if (kind === 'picture' && wasMoved && beforeT) pushUndo(beforeT);
+    if (kind === 'grid' && wasMoved) { persist(); syncUI(); }
+    if (!wasMoved) {   // a tap: two quick taps reset the zoom
+      var now = Date.now();
+      if (now - lastTap < 320) { resetView(); lastTap = 0; } else lastTap = now;
+    }
+  }
+  stage.addEventListener('pointerup', endPointer); stage.addEventListener('pointercancel', endPointer);
+  stage.addEventListener('wheel', function (e) {
+    if (!img) return; e.preventDefault();
+    var k = e.deltaY < 0 ? 1.08 : 1 / 1.08;
+    if (gestureKind() === 'picture') { T.scale *= k; place(); return; }
+    var s = Math.min(8, Math.max(1, V.s * k)), wx = (e.clientX - V.x) / V.s, wy = (e.clientY - V.y) / V.s;
+    V.s = s; V.x = e.clientX - wx * s; V.y = e.clientY - wy * s; clampView(); placeWorld();
+  }, { passive: false });
   document.addEventListener('gesturestart', function (e) { e.preventDefault(); });  // stop Safari zooming the page
 
-  // ---------- controls
+  // ---------- undo / redo for picture placement
+  function pushUndo(prev) { undoStack.push(prev); if (undoStack.length > 60) undoStack.shift(); redoStack = []; updateUndo(); }
+  function updateUndo() { $('undoBtn').disabled = !undoStack.length; $('redoBtn').disabled = !redoStack.length; }
+  function snap() { return { x: T.x, y: T.y, scale: T.scale, rot: T.rot }; }
+  $('undoBtn').addEventListener('click', function () { if (!undoStack.length) return; redoStack.push(snap()); var p = undoStack.pop(); T.x = p.x; T.y = p.y; T.scale = p.scale; T.rot = p.rot; place(); updateUndo(); });
+  $('redoBtn').addEventListener('click', function () { if (!redoStack.length) return; undoStack.push(snap()); var p = redoStack.pop(); T.x = p.x; T.y = p.y; T.scale = p.scale; T.rot = p.rot; place(); updateUndo(); });
+
+  // ---------- strobe
+  function setStrobe(on) {
+    strobeOn = on; clearInterval(strobeTimer); strobePhase = true;
+    if (on) { var period = Math.round(1700 - S.strobeSpeed * 150); strobeTimer = setInterval(function () { strobePhase = !strobePhase; place(); }, period / 2); }
+    place(); syncUI();
+  }
+
+  // ---------- bottom bar
+  function setMove(on) { move = on; syncUI(); }
+  function setTarget(t) {
+    target = t; syncUI();
+    toast(t === 'camera' ? 'Pinch to zoom in, drag to look around. Double-tap to zoom out.'
+      : t === 'grid' ? (move ? 'Drag to move the grid, pinch to change its size.' : 'Turn on Move to drag the grid.')
+      : (move ? 'Drag, pinch and twist to place the picture.' : 'Picture locked. Turn on Move to place it.'));
+  }
+  $('targets').querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { setTarget(b.dataset.t); }); });
+  $('moveBtn').addEventListener('click', function () {
+    setMove(!move);
+    toast(move ? (target === 'grid' ? 'Move on: drag the grid.' : 'Move on: drag, pinch and twist the picture.')
+      : 'Locked. Pinch to zoom in on details; the picture stays on your paper.');
+  });
+  $('hideBtn').addEventListener('click', function () { hidden = !hidden; place(); syncUI(); });
+  $('opacityBtn').addEventListener('click', function () { $('opacityPop').hidden = !$('opacityPop').hidden; syncUI(); });
+  $('opacity').addEventListener('input', function () { S.opacity = +this.value; persist(); place(); });
+
+  // ---------- top bar and Tools
+  $('toolsBtn').addEventListener('click', function () { $('tools').hidden = !$('tools').hidden; syncUI(); });
+  $('tabs').querySelectorAll('button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      $('tabs').querySelectorAll('button').forEach(function (o) { o.setAttribute('aria-selected', o === b ? 'true' : 'false'); });
+      document.querySelectorAll('[data-panel]').forEach(function (p) { p.hidden = p.dataset.panel !== b.dataset.tab; });
+    });
+  });
+  $('backBtn').addEventListener('click', function () {
+    $('start').hidden = false; $('top').hidden = true; $('bottom').hidden = true; $('tools').hidden = true;
+    if (strobeOn) setStrobe(false);
+  });
+  // picture tab
+  function setMode(m) { S.mode = m; if (m === 'values') S.step = 1; persist(); render(); syncUI(); }  // values always start at the lightest
+  $('modeSeg').querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { setMode(b.dataset.v); }); });
+  $('styleSeg').querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { S.lineStyle = b.dataset.v; persist(); render(); syncUI(); }); });
+  $('viewSeg').querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { S.view = b.dataset.v; persist(); render(); syncUI(); }); });
+  $('values').addEventListener('input', function () { $('valuesOut').textContent = this.value; });
+  $('values').addEventListener('change', function () { S.values = +this.value; S.step = Math.min(S.step, S.values); idx = null; persist(); reprocess(function () { render(); syncUI(); }); });
+  $('simplify').addEventListener('input', function () { $('simplifyOut').textContent = this.value; });
+  $('simplify').addEventListener('change', function () { S.simplify = +this.value; idx = null; lineMap = null; aiMap = null; persist(); reprocess(function () { render(); syncUI(); }); });
+  $('hl').addEventListener('click', function () { S.hl = (S.hl + 1) % HL.length; persist(); render(); syncUI(); });
+  $('colPrev').addEventListener('click', function () { S.color = (S.color + COLORS.length - 1) % COLORS.length; persist(); render(); syncUI(); });
+  $('colNext').addEventListener('click', function () { S.color = (S.color + 1) % COLORS.length; persist(); render(); syncUI(); });
+  $('mirror').addEventListener('click', function () { S.mirror = !S.mirror; persist(); place(); syncUI(); });
+  $('newPhoto').addEventListener('click', function () { $('file').click(); });
+  $('fit').addEventListener('click', function () { if (!img) return; pushUndo(snap()); fit(); });
+  // strobe tab
+  $('strobeSw').addEventListener('click', function () { setStrobe(!strobeOn); });
+  $('strobeSpeed').addEventListener('input', function () { S.strobeSpeed = +this.value; persist(); if (strobeOn) setStrobe(true); });
+  // grid tab
+  $('gridSw').addEventListener('click', function () { S.grid = !S.grid; persist(); drawGridLayer(); syncUI(); });
+  $('gridColPrev').addEventListener('click', function () { S.gridColor = (S.gridColor + COLORS.length - 1) % COLORS.length; persist(); drawGridLayer(); syncUI(); });
+  $('gridColNext').addEventListener('click', function () { S.gridColor = (S.gridColor + 1) % COLORS.length; persist(); drawGridLayer(); syncUI(); });
+  $('gridOpacity').addEventListener('input', function () { S.gridOpacity = +this.value; persist(); drawGridLayer(); });
+  $('gridSize').addEventListener('input', function () { S.gridSize = +this.value; persist(); drawGridLayer(); });
+  // camera tab
+  $('flipCam').addEventListener('click', function () {
+    facing = facing === 'environment' ? 'user' : 'environment';
+    startCamera().catch(function () { facing = facing === 'environment' ? 'user' : 'environment'; toast('This phone has no other camera to switch to.'); startCamera().catch(function () {}); });
+  });
+  $('pauseSw').addEventListener('click', function () {
+    var v = $('video'); paused = !paused;
+    if (paused) v.pause(); else { var pl = v.play(); if (pl && pl.catch) pl.catch(function () {}); }
+    syncUI();
+  });
+  $('resetZoom').addEventListener('click', resetView);
+  // flashlight tab
+  $('torchSw').addEventListener('click', function () {
+    var track = stream && stream.getVideoTracks()[0]; if (!track || this.disabled) return;
+    torchOn = !torchOn; syncUI();
+    track.applyConstraints({ advanced: [{ torch: torchOn }] }).catch(function () { torchOn = false; syncUI(); toast('The flashlight could not be turned on from the browser.'); });
+  });
+
+  function setSwitch(id, on) { $(id).setAttribute('aria-checked', on ? 'true' : 'false'); }
   function syncUI() {
     $('modeSeg').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.v === S.mode ? 'true' : 'false'); });
     $('viewSeg').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.v === S.view ? 'true' : 'false'); });
@@ -704,47 +955,30 @@ button, select, input { font: inherit; color: inherit; }
     $('values').value = S.values; $('valuesOut').textContent = S.values; $('opacity').value = S.opacity;
     $('simplify').value = S.simplify; $('simplifyOut').textContent = S.simplify;
     $('mirror').setAttribute('aria-pressed', S.mirror ? 'true' : 'false');
-    $('grid').setAttribute('aria-pressed', S.grid ? 'true' : 'false');
-    $('color').textContent = 'Lines: ' + COLORS[S.color][0];
+    $('colDot').style.background = 'rgb(' + COLORS[S.color][1].join(',') + ')';
+    var lc = S.mode === 'lines'; $('lineColorRow').querySelector('.note').hidden = !lc; $('colPrev').parentNode.hidden = !lc; $('colDot').hidden = !lc;
     $('hl').textContent = 'Colour: ' + HL[S.hl][0]; $('hl').hidden = S.view === 'all';
     var n = S.values, k = Math.min(Math.max(S.step, 1), n), name = NAMES[n][k - 1];
     $('stepLabel').textContent = S.view === 'all' ? 'All ' + n + ' values'
       : S.view === 'layered' ? (k === 1 ? 'Step 1 · paper to keep white' : 'Step ' + k + ' · paint ' + name.toLowerCase() + (k < n ? ' and darker' : ''))
       : 'Value ' + k + ' of ' + n + ' · ' + name;
     if (S.mode === 'values') buildStrip();
-    $('strip').querySelectorAll('.vbtn').forEach(function (b) {
-      b.setAttribute('aria-pressed', S.view !== 'all' && +b.dataset.v === k ? 'true' : 'false');
-    });
+    $('strip').querySelectorAll('.vbtn').forEach(function (b) { b.setAttribute('aria-pressed', S.view !== 'all' && +b.dataset.v === k ? 'true' : 'false'); });
+    // bottom bar
+    $('targets').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.t === target ? 'true' : 'false'); });
+    $('moveBtn').setAttribute('aria-pressed', move ? 'true' : 'false');
+    $('hideBtn').textContent = hidden ? 'Show' : 'Hide'; $('hideBtn').setAttribute('aria-pressed', hidden ? 'true' : 'false');
+    $('opacityBtn').setAttribute('aria-pressed', $('opacityPop').hidden ? 'false' : 'true');
+    $('toolsBtn').setAttribute('aria-expanded', $('tools').hidden ? 'false' : 'true');
+    // tools
+    setSwitch('strobeSw', strobeOn); $('strobeSpeed').value = S.strobeSpeed;
+    setSwitch('gridSw', S.grid); $('gridOpacity').value = S.gridOpacity; $('gridSize').value = S.gridSize;
+    $('gridDot').style.background = 'rgb(' + COLORS[S.gridColor][1].join(',') + ')';
+    setSwitch('pauseSw', paused); setSwitch('torchSw', torchOn);
   }
-  function setMode(m) { S.mode = m; if (m === 'values') S.step = 1; persist(); render(); syncUI(); if (!locked) fit(); }  // values always start at the lightest
-  $('modeSeg').querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { setMode(b.dataset.v); }); });
-  $('styleSeg').querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { S.lineStyle = b.dataset.v; persist(); render(); syncUI(); }); });
-  $('viewSeg').querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { S.view = b.dataset.v; persist(); render(); syncUI(); }); });
-  $('values').addEventListener('input', function () { $('valuesOut').textContent = this.value; });
-  $('simplify').addEventListener('input', function () { $('simplifyOut').textContent = this.value; });
-  $('simplify').addEventListener('change', function () { S.simplify = +this.value; idx = null; lineMap = null; aiMap = null; persist(); reprocess(function () { render(); syncUI(); }); });
-  $('values').addEventListener('change', function () { S.values = +this.value; S.step = Math.min(S.step, S.values); idx = null; persist(); reprocess(function () { render(); syncUI(); }); });
-  $('opacity').addEventListener('input', function () { S.opacity = +this.value; persist(); place(); });
-  $('mirror').addEventListener('click', function () { S.mirror = !S.mirror; persist(); place(); syncUI(); });
-  $('grid').addEventListener('click', function () { S.grid = !S.grid; persist(); render(); syncUI(); });
-  $('color').addEventListener('click', function () { S.color = (S.color + 1) % COLORS.length; persist(); render(); syncUI(); });
-  $('hl').addEventListener('click', function () { S.hl = (S.hl + 1) % HL.length; persist(); render(); syncUI(); });
-  $('fit').addEventListener('click', function () { if (locked) { toast('Unlock first to move the picture'); return; } fit(); });
-  $('lock').addEventListener('click', function () {
-    locked = !locked; this.setAttribute('aria-pressed', locked ? 'true' : 'false'); this.textContent = locked ? 'Locked' : 'Lock';
-    toast(locked ? 'Picture locked in place' : 'Picture unlocked: drag or pinch to move it');
-  });
-  $('hideBar').addEventListener('click', function () {
-    var hide = !$('bar').hidden; $('bar').hidden = hide;
-    this.setAttribute('aria-pressed', hide ? 'true' : 'false'); this.textContent = hide ? 'Show controls' : 'Hide controls';
-  });
-  function peek(on) { overlay.style.visibility = on ? 'hidden' : 'visible'; }
-  $('peek').addEventListener('pointerdown', function (e) { e.preventDefault(); peek(true); });
-  ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (t) { $('peek').addEventListener(t, function () { peek(false); }); });
-  $('peek').addEventListener('contextmenu', function (e) { e.preventDefault(); });
-  window.addEventListener('resize', function () { if (img && !locked) place(); });
+  window.addEventListener('resize', function () { drawGridLayer(); clampView(); placeWorld(); if (img) place(); });
 
-  syncUI();
+  updateUndo(); syncUI();
 })();
 </script>
 </body>

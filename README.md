@@ -17,8 +17,13 @@ and your chosen photo floats see-through on top, so you can draw while watching 
   and Phillip Isola (CVPR 2022, MIT License, https://github.com/carolineec/informative-drawings), run on the phone with
   onnxruntime-web: WebGPU where available, else WebAssembly. The 17 MB model downloads once and is kept on the device.
   See `models/README.md` and `models/LICENSE-informative-drawings`.
-- Drag to move, pinch to resize and rotate, then Lock. Hold "peek" to check your lines.
-- See-through slider, mirror, grid, line colour, torch (where the phone supports it), screen kept awake.
+- Controls: a top bar (Back, undo, redo, Tools), a Tools sheet with tabs (Picture, Strobe, Grid, Camera, Flashlight),
+  and a bottom bar choosing what your fingers move (Picture, Camera, Grid) plus Move, Hide and Opacity.
+- With **Move** on, drag, pinch and twist the picture (or drag the grid). Turn Move off to lock it; then pinch to zoom
+  the whole view (camera, picture and grid together, so the picture stays on the paper). Double-tap to zoom back out.
+- Strobe blinks the picture to compare with your drawing; the grid covers the screen with adjustable colour, opacity and
+  cell size; Camera can pause or switch cameras; Flashlight turns on the torch where the browser allows it.
+- Opacity, mirror and line colour; the screen is kept awake.
 
 Photos are processed on the device and never uploaded. Everything is in `index.html`; no build step.
 Needs https for camera access (GitHub Pages provides it).
