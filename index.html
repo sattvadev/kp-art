@@ -117,6 +117,12 @@ button, select, input { font: inherit; color: inherit; }
     <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted);margin-top:-4px"><span>Lightest</span><span>Darkest →</span></div>
     <div class="slider"><label for="values">Values</label><input id="values" type="range" min="3" max="7" step="1" value="5"><output id="valuesOut">5</output></div>
   </div>
+  <div class="row" id="styleRow" hidden>
+    <div class="seg" id="styleSeg" role="group" aria-label="Line style">
+      <button type="button" data-v="strokes" aria-pressed="true">Strokes</button>
+      <button type="button" data-v="ai" aria-pressed="false">AI sketch</button>
+    </div>
+  </div>
   <div class="row" id="simplifyRow" hidden>
     <div class="slider"><label for="simplify">Simplify</label><input id="simplify" type="range" min="0" max="10" step="1" value="3"><output id="simplifyOut">3</output></div>
   </div>
@@ -149,6 +155,7 @@ button, select, input { font: inherit; color: inherit; }
     <button type="button" class="big primary" id="go" disabled>Start camera</button>
     <p class="msg" id="err" hidden></p>
     <p style="font-size:.85rem">Photos stay on your phone. Nothing is uploaded.</p>
+    <p style="font-size:.78rem">AI sketch uses the Informative Drawings model by Caroline Chan, Frédo Durand and Phillip Isola (MIT License), run on your phone.</p>
   </div>
 </section>
 
@@ -164,18 +171,19 @@ button, select, input { font: inherit; color: inherit; }
     5: ['Paper', 'Light', 'Mid', 'Dark', 'Darkest'], 6: ['Paper', 'Light', 'Light mid', 'Dark mid', 'Dark', 'Darkest'],
     7: ['Paper', 'Pale', 'Light', 'Mid', 'Dark mid', 'Dark', 'Darkest'] };
 
-  var S = { mode: 'photo', view: 'layered', values: 5, simplify: 3, hl: 0, step: 1, opacity: 55, mirror: false, grid: false, color: 0 };
+  var S = { mode: 'photo', view: 'layered', values: 5, simplify: 3, hl: 0, lineStyle: 'strokes', step: 1, opacity: 55, mirror: false, grid: false, color: 0 };
   try { var sv = JSON.parse(localStorage.getItem('trace-camera') || 'null');
-    if (sv) ['mode', 'view', 'values', 'simplify', 'hl', 'opacity', 'mirror', 'grid', 'color'].forEach(function (k) { if (k in sv) S[k] = sv[k]; }); } catch (e) {}
+    if (sv) ['mode', 'view', 'values', 'simplify', 'hl', 'lineStyle', 'opacity', 'mirror', 'grid', 'color'].forEach(function (k) { if (k in sv) S[k] = sv[k]; }); } catch (e) {}
   if (S.mode !== 'photo' && S.mode !== 'lines' && S.mode !== 'values') S.mode = 'values';  // older saved modes
   function persist() { try { localStorage.setItem('trace-camera', JSON.stringify(S)); } catch (e) {} }
 
   var T = { x: 0, y: 0, scale: 1, rot: 0 };   // overlay placement on screen
   var locked = false, stream = null, wake = null, torchOn = false;
-  var img = null, idx = null, lineMap = null;  // processed photo, its value map and its line drawing
+  var img = null, idx = null, lineMap = null, aiMap = null;  // photo, value map, stroke drawing, AI sketch
   var srcCanvas = document.createElement('canvas');
   var overlay = $('overlay'), octx = overlay.getContext('2d');
 
+  function toastSticky(t) { var el = $('toast'); clearTimeout(toast.t); el.textContent = t; el.hidden = false; }
   function toast(t) { var el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(function () { el.hidden = true; }, 2200); }
 
   // ---------- photo
@@ -192,7 +200,7 @@ button, select, input { font: inherit; color: inherit; }
       img = { w: w, h: h, lum: lum, rgb: d };
       $('thumb').src = url; $('thumbName').textContent = f.name; $('thumbWrap').hidden = false;
       $('go').disabled = false; $('err').hidden = true;
-      S.step = 1; idx = null; lineMap = null; $('strip').dataset.key = '';
+      S.step = 1; idx = null; lineMap = null; aiMap = null; $('strip').dataset.key = '';
       if (!$('start').hidden) return;
       fit(); render(); syncUI();
     };
@@ -500,19 +508,107 @@ button, select, input { font: inherit; color: inherit; }
     if (!img) return;
     var w = img.w, h = img.h; overlay.width = w; overlay.height = h;
     if (S.mode === 'photo') { octx.drawImage(srcCanvas, 0, 0); drawGrid(); place(); return; }
+    if (S.mode === 'lines' && S.lineStyle === 'ai') {
+      if (!aiMap) { runAI(); return; }   // loads the model on first use, then draws
+      octx.putImageData(inkImage(aiMap), 0, 0); drawGrid(); place(); return;
+    }
     if (S.mode === 'lines') {
       if (!lineMap) { reprocess(function () { render(); syncUI(); }); return; }   // worked out on first need
-      octx.putImageData(lineImage(), 0, 0); drawGrid(); place(); return;
+      octx.putImageData(inkImage(lineMap), 0, 0); drawGrid(); place(); return;
     }
     if (!idx) { reprocess(function () { render(); syncUI(); }); return; }   // values are worked out on first need
     octx.putImageData(buildImage(S.mode, S.view, S.step), 0, 0); drawGrid(); place();
   }
   // The line drawing as an overlay: lines about 3 px wide at working size, transparent elsewhere.
-  function lineImage() {
+  // Ink (0..1 per pixel) as an overlay in the chosen line colour.
+  function inkImage(ink) {
     var w = img.w, h = img.h, out = octx.createImageData(w, h), o = out.data, col = COLORS[S.color][1];
-    for (var j = 0; j < w * h; j++) { var a = lineMap[j]; if (!a) continue;
+    for (var j = 0; j < w * h; j++) { var a = ink[j]; if (!a) continue;
       var p = j * 4; o[p] = col[0]; o[p + 1] = col[1]; o[p + 2] = col[2]; o[p + 3] = Math.round(255 * a); }
     return out;
+  }
+
+  // ---------- AI sketch: Informative Drawings (Chan, Durand & Isola, CVPR 2022, MIT), run on the device
+  var ORT = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
+  var MODEL = 'models/opensketch.onnx', MODEL_BYTES = 17198443, sessionP = null, aiBusy = false;
+  function loadScript(src) {
+    return new Promise(function (res, rej) { var el = document.createElement('script'); el.src = src;
+      el.onload = res; el.onerror = function () { rej(new Error('the AI runtime could not load (check your connection)')); };
+      document.head.appendChild(el); });
+  }
+  function fetchModel() {
+    var cacheP = ('caches' in window) ? caches.open('trace-camera-ai-v1').catch(function () { return null; }) : Promise.resolve(null);
+    return cacheP.then(function (cache) {
+      return (cache ? cache.match(MODEL).catch(function () { return null; }) : Promise.resolve(null)).then(function (hit) {
+        if (hit) return hit.arrayBuffer();
+        toastSticky('Downloading the AI model (17 MB, once)…');
+        return fetch(MODEL).then(function (resp) {
+          if (!resp.ok) throw new Error('the AI model could not download (' + resp.status + ')');
+          var reader = resp.body && resp.body.getReader ? resp.body.getReader() : null;
+          if (!reader) return resp.arrayBuffer();
+          var chunks = [], got = 0;
+          function pump() { return reader.read().then(function (r) {
+            if (r.done) return;
+            chunks.push(r.value); got += r.value.length;
+            toastSticky('Downloading the AI model… ' + Math.min(100, Math.round(got / MODEL_BYTES * 100)) + '%');
+            return pump(); }); }
+          return pump().then(function () {
+            var buf = new Uint8Array(got), o = 0; chunks.forEach(function (c) { buf.set(c, o); o += c.length; });
+            if (cache) cache.put(MODEL, new Response(buf.slice(), { headers: { 'Content-Type': 'application/octet-stream' } })).catch(function () {});
+            return buf.buffer;
+          });
+        });
+      });
+    });
+  }
+  function loadModel() {
+    if (sessionP) return sessionP;
+    sessionP = (window.ort ? Promise.resolve() : (toastSticky('Loading the AI…'), loadScript(ORT + 'ort.webgpu.min.js')))
+      .then(function () {
+        ort.env.wasm.wasmPaths = ORT;
+        ort.env.wasm.numThreads = window.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 2) : 1;
+        return fetchModel();
+      })
+      .then(function (buf) {
+        toastSticky('Starting the AI…');
+        // the phone's graphics chip when the browser offers it (much faster), else the processor
+        var eps = navigator.gpu ? ['webgpu', 'wasm'] : ['wasm'];
+        return ort.InferenceSession.create(new Uint8Array(buf), { executionProviders: eps, graphOptimizationLevel: 'all' });
+      })
+      .catch(function (e) { sessionP = null; throw e; });
+    return sessionP;
+  }
+  // Runs the model on the photo; returns ink 0..1 at the photo's working size.
+  function aiInfer(sess) {
+    var sp = S.simplify, L = sp <= 1 ? 640 : 512, sc = L / Math.max(img.w, img.h);   // 640 only when asking for most detail
+    var W = Math.max(8, Math.round(img.w * sc / 8) * 8), H = Math.max(8, Math.round(img.h * sc / 8) * 8), plane = W * H;
+    var c = document.createElement('canvas'); c.width = W; c.height = H; var cx = c.getContext('2d');
+    cx.drawImage(srcCanvas, 0, 0, W, H);
+    var d = cx.getImageData(0, 0, W, H).data, x = new Float32Array(3 * plane);
+    for (var i = 0; i < plane; i++) { x[i] = d[i * 4] / 255; x[plane + i] = d[i * 4 + 1] / 255; x[2 * plane + i] = d[i * 4 + 2] / 255; }
+    return sess.run({ input: new ort.Tensor('float32', x, [1, 3, H, W]) }).then(function (res) {
+      var y = res.output.data, lo = 0.08 + sp * 0.045, hi = lo + 0.45, a8 = new Uint8ClampedArray(plane * 4);
+      for (var k = 0; k < plane; k++) {   // darker = more ink; faint construction lines drop out as Simplify rises
+        var v = 1 - y[k], u = v <= lo ? 0 : v >= hi ? 1 : (v - lo) / (hi - lo);
+        a8[k * 4 + 3] = Math.round(255 * u * u * (3 - 2 * u)); }
+      var c2 = document.createElement('canvas'); c2.width = W; c2.height = H; c2.getContext('2d').putImageData(new ImageData(a8, W, H), 0, 0);
+      var c3 = document.createElement('canvas'); c3.width = img.w; c3.height = img.h; var x3 = c3.getContext('2d');
+      x3.imageSmoothingQuality = 'high'; x3.drawImage(c2, 0, 0, img.w, img.h);
+      var a3 = x3.getImageData(0, 0, img.w, img.h).data, ink = new Float32Array(img.w * img.h);
+      for (var j = 0; j < ink.length; j++) ink[j] = a3[j * 4 + 3] / 255;
+      return ink;
+    });
+  }
+  function runAI() {
+    if (aiBusy || !img) return; aiBusy = true;
+    loadModel()
+      .then(function (sess) { toastSticky('Drawing with AI…'); return new Promise(function (r) { setTimeout(r, 40); }).then(function () { return aiInfer(sess); }); })
+      .then(function (ink) { aiMap = ink; aiBusy = false; $('toast').hidden = true; render(); syncUI(); })
+      .catch(function (e) {
+        aiBusy = false; S.lineStyle = 'strokes'; persist();
+        toast('AI sketch could not run: ' + (e && e.message || e) + '. Showing strokes instead.');
+        render(); syncUI();
+      });
   }
   // The breakdown strip: one small stencil per value, lightest first.
   function buildStrip() {
@@ -594,6 +690,8 @@ button, select, input { font: inherit; color: inherit; }
     $('viewSeg').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.v === S.view ? 'true' : 'false'); });
     $('valueRow').hidden = S.mode !== 'values';
     $('simplifyRow').hidden = S.mode === 'photo';
+    $('styleRow').hidden = S.mode !== 'lines';
+    $('styleSeg').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.v === S.lineStyle ? 'true' : 'false'); });
     $('values').value = S.values; $('valuesOut').textContent = S.values; $('opacity').value = S.opacity;
     $('simplify').value = S.simplify; $('simplifyOut').textContent = S.simplify;
     $('mirror').setAttribute('aria-pressed', S.mirror ? 'true' : 'false');
@@ -611,10 +709,11 @@ button, select, input { font: inherit; color: inherit; }
   }
   function setMode(m) { S.mode = m; if (m === 'values') S.step = 1; persist(); render(); syncUI(); if (!locked) fit(); }  // values always start at the lightest
   $('modeSeg').querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { setMode(b.dataset.v); }); });
+  $('styleSeg').querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { S.lineStyle = b.dataset.v; persist(); render(); syncUI(); }); });
   $('viewSeg').querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { S.view = b.dataset.v; persist(); render(); syncUI(); }); });
   $('values').addEventListener('input', function () { $('valuesOut').textContent = this.value; });
   $('simplify').addEventListener('input', function () { $('simplifyOut').textContent = this.value; });
-  $('simplify').addEventListener('change', function () { S.simplify = +this.value; idx = null; lineMap = null; persist(); reprocess(function () { render(); syncUI(); }); });
+  $('simplify').addEventListener('change', function () { S.simplify = +this.value; idx = null; lineMap = null; aiMap = null; persist(); reprocess(function () { render(); syncUI(); }); });
   $('values').addEventListener('change', function () { S.values = +this.value; S.step = Math.min(S.step, S.values); idx = null; persist(); reprocess(function () { render(); syncUI(); }); });
   $('opacity').addEventListener('input', function () { S.opacity = +this.value; persist(); place(); });
   $('mirror').addEventListener('click', function () { S.mirror = !S.mirror; persist(); place(); syncUI(); });

@@ -13,6 +13,10 @@ and your chosen photo floats see-through on top, so you can draw while watching 
   then cleaned of slivers and specks so each value is a solid stencil. A second 'details' pass from a lightly smoothed
   photo keeps small features the broad shapes would flatten: eye openings, nostrils, ear holes, the lip line, catchlights.
   A Simplify slider trades detail for bolder shapes.
+- **AI sketch** (optional, in Outlines): the "OpenSketch" model from *Informative Drawings* by Caroline Chan, Frédo Durand
+  and Phillip Isola (CVPR 2022, MIT License, https://github.com/carolineec/informative-drawings), run on the phone with
+  onnxruntime-web: WebGPU where available, else WebAssembly. The 17 MB model downloads once and is kept on the device.
+  See `models/README.md` and `models/LICENSE-informative-drawings`.
 - Drag to move, pinch to resize and rotate, then Lock. Hold "peek" to check your lines.
 - See-through slider, mirror, grid, line colour, torch (where the phone supports it), screen kept awake.
 
