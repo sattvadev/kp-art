@@ -369,7 +369,8 @@ button, select, input { font: inherit; color: inherit; }
     for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
       var j = y * w + x, p = j * 4, s0 = sh[j], r = 0, g = 0, b = 0, a = 0;
       if (mode === 'values') {
-        if (view === 'stencil' && s0) { r = col[0]; g = col[1]; b = col[2]; a = 150; }
+        // stencil strength follows the value: 1 (paper) a faint tint, n (darkest) nearly solid
+        if (view === 'stencil' && s0) { r = col[0]; g = col[1]; b = col[2]; a = Math.round(255 * (0.12 + 0.78 * (k - 1) / (n - 1))); }
         if (view !== 'stencil' && s0 > 1) { r = col[0]; g = col[1]; b = col[2]; a = Math.round(255 * 0.85 * (s0 - 1) / (n - 1)); }
       }
       var edge = (x < w - 1 && sh[j + 1] !== s0) || (y < h - 1 && sh[j + w] !== s0) || (x > 0 && sh[j - 1] !== s0) || (y > 0 && sh[j - w] !== s0);
