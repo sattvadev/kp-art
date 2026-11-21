@@ -2,8 +2,8 @@
 
 KP Art is a camera tracing app for drawing and watercolour. Live at https://sattvadev.github.io/kp-art/
 
-It is the art-only edition of NUMOTIFSTUDIO - Trace: the app as it was before the fashion features, kept separate from
-the fashion edition (sattvadev/trace-camera). Colours follow the KP Art logo (wine #6C0130) on the NU Motif design system
+It is the art-only edition of NUMOTIFSTUDIO - Trace: the camera tracing and the draw-on-screen painting tools, without the
+fashion features, kept separate from the fashion edition (sattvadev/trace-camera). Colours follow the KP Art logo (wine #6C0130) on the NU Motif design system
 (warm paper, DM Sans). Icons and the white KP mark are in `assets/`.
 
 A browser tool for tracing a picture onto paper. The phone's camera shows your paper live,
@@ -40,6 +40,72 @@ and your chosen photo floats see-through on top, so you can draw while watching 
   squares go across; Hide leaves the grid showing. A screen grid (fixed to the screen, draggable) is still available.
 - Strobe blinks the picture to compare with your drawing; the grid has adjustable colour and opacity; Camera can pause or switch cameras; Flashlight turns on the torch where the browser allows it.
 - Opacity, mirror and line colour; the screen is kept awake.
+
+## Draw on screen (iPad + Apple Pencil, or a finger on a phone)
+
+The same painting tools as NUMOTIFSTUDIO - Trace, without the fashion features (no prints, croquis, line-up or AI sketches
+from photos).
+
+- **The screen is the paper:** the start screen's second button skips the camera. The Pencil draws over the picture with
+  pressure (wider line) and tilt (shading). Fingers never draw unless **Finger draws** is on (Tools → Draw), so a resting palm
+  leaves no marks; a touch while the Pencil is down, or just after it lifts, is ignored. On a phone the finger draws by default;
+  on iPad the first one-finger tap asks once whether to turn finger drawing on. Two fingers move and pinch-zoom the page (the
+  drawing re-renders sharp at the new zoom); two- and three-finger taps undo and redo.
+- **Rail on the left:** Brush, Eraser, Fill, Colour, Settings, Layers and Mirror. On short screens (a phone on its side) the
+  rail starts under the top bar.
+- **Brushes**, grouped in the picker: Sketch: pencil (paper grain, tilt to shade), charcoal (coarse, broken grain). Ink and
+  lines: fineliner, technical pen (one even width), brush pen (tapered, pressure-swelling), dip pen (hairline to bold with
+  pressure), calligraphy (a flat nib at a set angle, thick and thin from the stroke's direction). Paint and colour: marker
+  (see-through, multiplies where it overlaps), watercolour, gouache, dry brush (bristles that streak and run dry, seeded per
+  stroke so a saved drawing looks the same), pastel (waxy, paper showing through), airbrush. Shading: Shadow and Highlight
+  (work anywhere by default; "Only on paint already there" limits them to paint on their layer). Hard or soft eraser on the
+  chosen layer. Every line stroke is built from simple shapes (round dabs, a swept nib, or bristles) shared by the screen and
+  the SVG export.
+- **Brush settings panel:** a live preview stroke drawn by the real engine, then Size and Opacity and only the settings that
+  apply to the brush: Hardness, Nib angle, Nib thickness and "Nib turns with Apple Pencil" (calligraphy), Size with pressure,
+  Tilt to shade, Smoothing, Taper start and end, Size jitter, Paper grain, Only on paint already there. Each brush keeps its own
+  settings; Reset this brush restores them. What a stroke needs is saved with the stroke, so changing settings later never
+  changes earlier lines.
+- **Size ring:** a circle at the brush's size under a hovering Apple Pencil (or mouse), under the eraser while erasing, and in
+  the middle of the screen while dragging Size.
+- **Colour:** recent colours, the value-step greys, neutrals, earth pigments (ochre, siennas, umbers, Payne's grey), a colour
+  wheel of paint colours, the system colour picker, and Pick colour from photo (averages the reference photo's real pixels
+  under the tap). **Recolour** swaps one colour for another across the whole drawing (undo puts it back).
+- **Fill:** tap inside a closed outline (the shown Sketch and Lines layers) to fill it with the current colour on the Colour
+  layer, under the lines. Close gaps bridges small breaks; an open shape is refused instead of flooding the page.
+- **Layers** bottom to top: Colour, Sketch, Lines, each shown or hidden with its own opacity; brushes pick their layer (paint
+  goes under the lines). Optional watercolour paper texture behind the page. Watercolour, airbrush, shading and soft edges are
+  painted per stroke (blurred body and bleed, darker drying edge, pigment variation and paper granulation) and cached per zoom.
+- **Mirror:** copies what you draw across the middle of the page (shown as a dashed line), for symmetrical subjects.
+- **Save:** Tools → Draw saves a PNG of every shown layer (about 3000 px on the long side) or an SVG of the line brushes,
+  grouped by layer, with erasers as masks (watercolour, airbrush, shading, soft edges and fills are pixels, so only in the PNG).
+  Files go through the share sheet on iPhone and iPad.
+- **Keyboard:** Cmd/Ctrl+Z undo; Shift+Cmd/Ctrl+Z or Ctrl+Y redo (ignored while typing in a text field).
+
+## Saved on the device, a new canvas every start
+
+- The photo, its placement and the drawing are saved in this browser (IndexedDB `kp-art`) as you work. Nothing is uploaded.
+- **Home** saves the project and resets the start screen (no photo, drawing or undo history), so whatever starts next is
+  blank. "Continue where you left off" reopens the last project; the first save of a new project keeps the one it replaces,
+  shown as "or open the one before" (opening it swaps the two).
+- The drawing stays with the centred picture when the iPad or phone rotates.
+
+## Update banner
+
+The page carries its build number (`<meta name="app-build">`) and `version.json` on the server holds the newest. The app
+checks when it opens, when it comes back to the front and every 30 minutes; if the server is newer it offers "A new version
+of KP Art is ready. Update". Update saves the open drawing, refreshes the browser's copy of the page (GitHub Pages lets
+browsers keep it for 10 minutes; KP Art has no service worker) and reloads. `stamp-build.sh` sets a new build number (date
+plus count) in both files; the git pre-commit hook runs it whenever `index.html` is committed. (The hook lives in
+`.git/hooks/pre-commit`, so on a fresh clone run `./stamp-build.sh` before committing, or copy the hook back:
+
+```sh
+#!/bin/sh
+if git diff --cached --name-only | grep -qx 'index.html'; then
+  ./stamp-build.sh >/dev/null && git add index.html version.json
+fi
+```
+)
 
 Photos are processed on the device and never uploaded. Everything is in `index.html`; no build step.
 Needs https for camera access (GitHub Pages provides it).
