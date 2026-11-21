@@ -1,7 +1,10 @@
-# NUMOTIFSTUDIO - Trace Art
+# KP Art
 
-NU Motif Studio's camera tracing app for art (drawing and watercolour). This is the art-only edition: it is the Trace app as it was before the fashion features, kept separate from the fashion edition in `../trace-camera`. It is styled with the NU Motif design tokens (Oxblood: warm paper, wine accent, DM Sans).
-Brand assets are in `assets/` (white wordmark, app icons).
+KP Art is a camera tracing app for drawing and watercolour. Live at https://sattvadev.github.io/kp-art/
+
+It is the art-only edition of NUMOTIFSTUDIO - Trace: the app as it was before the fashion features, kept separate from
+the fashion edition (sattvadev/trace-camera). Colours follow the KP Art logo (wine #6C0130) on the NU Motif design system
+(warm paper, DM Sans). Icons and the white KP mark are in `assets/`.
 
 A browser tool for tracing a picture onto paper. The phone's camera shows your paper live,
 and your chosen photo floats see-through on top, so you can draw while watching your pencil on screen.
