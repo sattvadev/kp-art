@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="theme-color" content="#7C2A34">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="NUMOTIFSTUDIO - Trace">
-<meta name="application-name" content="NUMOTIFSTUDIO - Trace">
-<title>NUMOTIFSTUDIO - Trace</title>
+<meta name="apple-mobile-web-app-title" content="NUMOTIFSTUDIO - Trace Art">
+<meta name="application-name" content="NUMOTIFSTUDIO - Trace Art">
+<title>NUMOTIFSTUDIO - Trace Art</title>
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap">
 <style>
-/* NUMOTIFSTUDIO - Trace. A camera tracing tool: the camera fills the screen; the picture and the grid ride on it.
+/* NUMOTIFSTUDIO - Trace Art. A camera tracing tool: the camera fills the screen; the picture and the grid ride on it.
    Floating frosted pills: a top bar (home, undo, redo, help, Tools), a Tools panel with tabs,
    and a bottom bar (step strip, then Move / Hide / Opacity).
    Colours, type, radii and shadows follow the NU Motif design tokens (Oxblood, light mode). */
@@ -332,7 +332,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
   <div class="startcard">
     <div class="brand"><img src="assets/wordmark-white.png" alt="NU Motif Studio" width="441" height="64"><span>Trace</span></div>
     <div class="eyebrow">Camera tracing</div>
-    <h1 id="startTitle">NUMOTIFSTUDIO - Trace</h1>
+    <h1 id="startTitle">NUMOTIFSTUDIO - Trace Art</h1>
     <p>Your picture floats over the live camera, so you can trace it onto paper while watching your pencil on screen.</p>
     <ol class="steps">
       <li>Prop your phone 25–40 cm above the paper, camera facing down (a stand, a glass or a stack of books).</li>
@@ -365,7 +365,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
   var S = { mode: 'photo', view: 'layered', values: 5, simplify: 3, hl: 0, lineStyle: 'ai', step: 1, opacity: 55, mirror: false,
             color: 0, grid: false, gridColor: 3, gridOpacity: 80, gridSize: 90, gridOn: 'photo', gridCells: 4, gridDiag: false, strobeSpeed: 4, aiView: 'layered', aiLayer: 1, cumulative: true };
   var SAVED = ['mode', 'view', 'values', 'simplify', 'hl', 'lineStyle', 'opacity', 'mirror', 'color', 'grid', 'gridColor', 'gridOpacity', 'gridSize', 'gridOn', 'gridCells', 'gridDiag', 'strobeSpeed', 'aiView', 'aiLayer', 'cumulative'];
-  try { var sv = JSON.parse(localStorage.getItem('trace-camera') || 'null');
+  try { var sv = JSON.parse(localStorage.getItem('trace-art') || 'null');
     if (sv) SAVED.forEach(function (k) { if (k in sv) S[k] = sv[k]; });
     if (sv && !sv.v2) S.lineStyle = 'ai';   // one-time switch: AI sketch became the default outline style
     if (typeof S.grid !== 'boolean') S.grid = false;
@@ -374,7 +374,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
   S.v2 = 1;
   if (S.mode !== 'photo' && S.mode !== 'lines' && S.mode !== 'values') S.mode = 'values';  // older saved modes
   if (S.color >= COLORS.length) S.color = 0;
-  function persist() { try { localStorage.setItem('trace-camera', JSON.stringify(S)); } catch (e) {} }
+  function persist() { try { localStorage.setItem('trace-art', JSON.stringify(S)); } catch (e) {} }
 
   var T = { x: 0, y: 0, scale: 1, rot: 0 };   // picture placement, in world pixels
   var V = { x: 0, y: 0, s: 1 };              // view zoom: the whole world (camera + picture + grid)
@@ -1127,6 +1127,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
   $('leaveNo').addEventListener('click', function () { $('leave').hidden = true; });
   $('leaveYes').addEventListener('click', goHome);
   $('leave').addEventListener('click', function (e) { if (e.target === this) this.hidden = true; });
+  if (history.state && history.state.tc) history.replaceState(null, '');   // a reload starts fresh, so back from drawing still asks
   window.addEventListener('popstate', function (e) {
     var st = e.state && e.state.tc;
     if (goingHome) { goingHome = false; showStart(); return; }

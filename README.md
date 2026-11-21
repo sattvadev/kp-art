@@ -1,6 +1,6 @@
-# NUMOTIFSTUDIO - Trace
+# NUMOTIFSTUDIO - Trace Art
 
-NU Motif Studio's camera tracing app, styled with the NU Motif design tokens (Oxblood: warm paper, wine accent, DM Sans).
+NU Motif Studio's camera tracing app for art (drawing and watercolour). This is the art-only edition: it is the Trace app as it was before the fashion features, kept separate from the fashion edition in `../trace-camera`. It is styled with the NU Motif design tokens (Oxblood: warm paper, wine accent, DM Sans).
 Brand assets are in `assets/` (white wordmark, app icons).
 
 A browser tool for tracing a picture onto paper. The phone's camera shows your paper live,
