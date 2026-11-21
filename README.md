@@ -80,7 +80,28 @@ from photos).
 - **Save:** Tools → Draw saves a PNG of every shown layer (about 3000 px on the long side) or an SVG of the line brushes,
   grouped by layer, with erasers as masks (watercolour, airbrush, shading, soft edges and fills are pixels, so only in the PNG).
   Files go through the share sheet on iPhone and iPad.
-- **Keyboard:** Cmd/Ctrl+Z undo; Shift+Cmd/Ctrl+Z or Ctrl+Y redo (ignored while typing in a text field).
+- **Layers (rail: Layers):** every drawing starts with Colour, Sketch and Lines; + New layer adds one above the current
+  layer (up to 12). Each row has a thumbnail, show/hide, lock and opacity; ⋯ has Blend (Normal, Multiply, Screen, Overlay,
+  Soft light, Darken, Lighten, Colour), Rename (or double-tap the name), Move up/down, Duplicate, Merge down, Clear and
+  Delete. Every change is one undo step and the layers are saved with the drawing. A locked layer cannot be drawn on,
+  erased, filled or moved. Fills go on Colour (or on your own layer when you are on one). Merge down keeps plain strokes
+  as strokes; a layer that erases, blends, is faded or shades only its paint merges as one picture so it looks the same.
+- **Select (rail: Select):** draw a loop on the current layer. A loop round whole lines keeps them as lines; a loop that
+  cuts through lines (or round lines an eraser touched) takes the pixels inside as one picture. Tap a line to pick it.
+  Drag to move, corners to scale, edge squares to stretch, the round handle to turn; Flip ↔ ↕, Duplicate, Copy, Cut,
+  Paste, Delete and Move to another layer. Two fingers still move and zoom.
+- **Pick a colour:** touch and hold with the Pencil (or finger, with finger drawing on): a loupe shows the new colour over
+  the current one; lift to keep it. A resting palm never picks. Option-click picks at once. Switch it off in Colour.
+- **Keyboard:** Cmd/Ctrl+Z undo; Shift+Cmd/Ctrl+Z or Ctrl+Y redo (ignored while typing in a text field). With a selection:
+  Cmd+C, Cmd+X, Cmd+V, Cmd+D, Delete, arrows nudge (Shift ×10), Escape lets go; Cmd+A selects the whole layer.
+- **Speed and memory (for iPad):** watercolour, airbrush and shading pixels are painted in a pool of workers (identical
+  pixels); after a zoom the paint shows at once and sharpens in the background; PNG export paints in the workers first.
+  Soft paint is cached at lower resolution on screen only, within a memory budget (96 MB on iPad), and layer canvases
+  exist only for layers with something on them.
+- **Saving:** 0.9 s after the last change, at least every 5 s while drawing without a pause, and at once when the app goes
+  to the background; a failed save (a full device) says so.
+- **Device check (`?selftest`, or Help → Check this device):** tests every tool on the device with a simulated Pencil and
+  reports times and results to copy or share. It uses its own storage ('-selftest'), cleared at the end.
 
 ## Saved on the device, a new canvas every start
 
