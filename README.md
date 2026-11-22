@@ -98,6 +98,12 @@ from photos).
   follow the symmetry. Colourways: Shuffle colours or New palette (keeps light and dark). Save the tile (one exact
   repeat, 1024–4096 px with 150/300 DPI print sizes; upload as Basic), a 3×3 swatch PNG, or the swatch as SVG.
   Kaleidoscopes save from Tools → Draw with every segment. Saved with the drawing.
+- **Procreate-style tools:** clipping masks and alpha lock (Layers → ⋯), 16 blend modes, StreamLine per brush and a
+  Pencil pressure curve (Settings), QuickShape (hold at the end of a stroke to snap a line, arc, ellipse, rectangle or
+  polygon; a finger makes it perfect), ColorDrop (drag the colour onto a shape; hold and slide to close gaps), and My
+  palettes (from a photo, or .ase/.aco/.gpl/.swatches files).
+- **Pattern studio v2:** start from a photo (cut to the symmetry's fundamental domain: photo kaleidoscopes and seamless
+  photo wallpapers), Seigaiha, Shippō and Asanoha starter motifs, Scales and Scatter layouts, and palette colourways.
 - **Keyboard:** Cmd/Ctrl+Z undo; Shift+Cmd/Ctrl+Z or Ctrl+Y redo (ignored while typing in a text field). With a selection:
   Cmd+C, Cmd+X, Cmd+V, Cmd+D, Delete, arrows nudge (Shift ×10), Escape lets go; Cmd+A selects the whole layer.
 - **Speed and memory (for iPad):** watercolour, airbrush and shading pixels are painted in a pool of workers (identical
