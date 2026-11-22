@@ -92,6 +92,12 @@ from photos).
   Paste, Delete and Move to another layer. Two fingers still move and zoom.
 - **Pick a colour:** touch and hold with the Pencil (or finger, with finger drawing on): a loupe shows the new colour over
   the current one; lift to keep it. A resting palm never picks. Option-click picks at once. Switch it off in Colour.
+- **Pattern studio (rail: Pattern):** a kaleidoscope (every line turned round a centre, 2–32 segments, mirrored or not),
+  a seamless repeat (Grid, Half-drop, Brick, Mirror, Hex; draw anywhere and it repeats live, across the tile edges) or
+  one of the 17 wallpaper symmetries (picture tiles with friendly names). Tile size, movable centre, guides; fills
+  follow the symmetry. Colourways: Shuffle colours or New palette (keeps light and dark). Save the tile (one exact
+  repeat, 1024–4096 px with 150/300 DPI print sizes; upload as Basic), a 3×3 swatch PNG, or the swatch as SVG.
+  Kaleidoscopes save from Tools → Draw with every segment. Saved with the drawing.
 - **Keyboard:** Cmd/Ctrl+Z undo; Shift+Cmd/Ctrl+Z or Ctrl+Y redo (ignored while typing in a text field). With a selection:
   Cmd+C, Cmd+X, Cmd+V, Cmd+D, Delete, arrows nudge (Shift ×10), Escape lets go; Cmd+A selects the whole layer.
 - **Speed and memory (for iPad):** watercolour, airbrush and shading pixels are painted in a pool of workers (identical
